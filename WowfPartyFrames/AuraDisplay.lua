@@ -134,12 +134,12 @@ function Display:ConfigureBuffs(card)
     state.views[2].holder:Hide()
     state.views[3].holder:Hide()
     local ok, reason = pcall(function()
-        local excluded, last = {}, 0
+        local excluded, count = {}, 0
         for index, button in ipairs(card.buffs) do
             local key, id = "buff" .. index, button.spellID
             local ids = id and ns.Spells:GetAuraSpellIDs(id) or {}
             if id then
-                last = index
+                count = count + 1
                 for auraID in pairs(ids) do excluded[auraID] = true end
             end
             container:SetAuraSlotEnabled(key, false)
@@ -151,8 +151,8 @@ function Display:ConfigureBuffs(card)
         extras.container:SetAuraGroupCandidateFilters("auras", next(excluded) and { excludeSpellIDs = excluded } or nil)
         extras.holder:ClearAllPoints()
         extras.holder:SetPoint("TOPLEFT", card, "TOPLEFT",
-            ns.Layout.auraX + last * ns.Layout.auraPitch, ns.Layout.buffY)
-        extras.container:SetAuraGroupMaxFrameCount("auras", math.max(0, COUNT - last))
+            ns.Layout.auraX + count * ns.Layout.auraPitch, ns.Layout.buffY)
+        extras.container:SetAuraGroupMaxFrameCount("auras", math.max(0, COUNT - count))
     end)
     state.buffsConfigured = ok
     if not ok then

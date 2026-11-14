@@ -213,11 +213,17 @@ end
 local function applyCardProfile(card)
     card.presetID = card.previewIndex and (ns.Settings and ns.Settings.presetID or "default")
         or card.memberKey and ns.Assignments:GetPreset(card.memberKey) or nil
+    local buffCount = 0
     for _, kind in ipairs({"heals", "buffs"}) do
         for index, button in ipairs(card[kind]) do
             local id = ns.Profiles:GetSpell(card.presetID, kind, index)
             configureSpell(button, id)
             if kind == "buffs" and button.spellID then
+                -- Saved slots can have holes. Pack the visible buttons while
+                -- preserving their identities and attached native aura overlays.
+                button:ClearAllPoints()
+                button:SetPoint("TOPLEFT", L.auraX + buffCount * L.auraPitch, L.buffY)
+                buffCount = buffCount + 1
                 if card.previewIndex then
                     button.buffState = index == 1 and card.previewIndex == 2 and "missing" or "active"
                     button.glow:SetAlpha(button.buffState == "missing" and 1 or 0)

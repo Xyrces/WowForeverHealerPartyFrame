@@ -30,7 +30,7 @@ Record the client build, addon version, pass/fail results, and exact error text 
 - [ ] Assign different spells to Caster. Returning to Tank retains Tank's assignments.
 - [ ] Clearing a spell also clears it in the open preview. Deleting the selected preset immediately displays Default and its spells in settings and preview.
 - [ ] Drag a buff into the empty slot. Another empty slot appears, up to eight assigned buffs.
-- [ ] Right-click a middle buff slot to clear it; remaining assignments stay intact and the empty slot can be reused.
+- [ ] Right-click a first, middle, or last buff slot to clear it; remaining assignments close the gap in settings, live frames, and preview. Other active buffs follow immediately, with no lost row capacity. Remaining buttons still cast their assigned exact ranks on the correct member. Reuse a cleared slot and reload a previously sparse preset; neither should leave gaps.
 - [ ] Dropping an item or other invalid cursor content does not erase the old spell or consume the cursor item.
 - [ ] Assignments and exact ranks survive `/reload`.
 - [ ] Configure different exact ranks in the same slot across all four layers. Changing tabs shows the correct assignments and clearing one layer leaves the others unchanged. Buffs do not change with the selected layer.
