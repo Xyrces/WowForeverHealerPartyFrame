@@ -106,16 +106,39 @@ function Settings:Create()
     close:SetPoint("TOPRIGHT", -3, -3)
     close:SetScript("OnClick", function() frame:Hide() end)
     label(frame, "Party-member class", 17, -53, "GameFontHighlightSmall")
-    local selector = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    local selector = CreateFrame("Button", nil, frame, "BackdropTemplate")
     frame.selector = selector
     selector:SetSize(154, 24)
     selector:SetPoint("TOPRIGHT", -17, -46)
+    ns.SetBackdrop(selector, { 0.035, 0.03, 0.025, 1 }, { 0.5, 0.43, 0.31, 1 })
+    selector.title = label(selector, "", 10, -7, "GameFontHighlightSmall")
+    selector.title:SetWidth(114)
+    selector.title:SetHeight(12)
+    selector.title:SetJustifyH("LEFT")
+    selector.title:SetWordWrap(false)
+    selector.arrow = selector:CreateTexture(nil, "ARTWORK")
+    selector.arrow:SetSize(24, 24)
+    selector.arrow:SetPoint("RIGHT", -2, 0)
+    local function paintSelector(pressed)
+        local open = frame.menu and frame.menu:IsShown()
+        local direction = open and "Up" or "Down"
+        selector.arrow:SetTexture("Interface\\ChatFrame\\UI-ChatIcon-Scroll" .. direction
+            .. (pressed and "-Down" or "-Up"))
+        local lit = open or selector.hovered
+        selector:SetBackdropBorderColor(lit and 0.9 or 0.5, lit and 0.72 or 0.43, lit and 0.38 or 0.31, 1)
+        selector:SetBackdropColor(pressed and 0.015 or 0.035, pressed and 0.012 or 0.03, 0.025, 1)
+    end
+    selector:SetScript("OnEnter", function() selector.hovered = true; paintSelector() end)
+    selector:SetScript("OnLeave", function() selector.hovered = false; paintSelector() end)
+    selector:SetScript("OnMouseDown", function(_, button) if button == "LeftButton" then paintSelector(true) end end)
+    selector:SetScript("OnMouseUp", function() paintSelector() end)
     local menu = CreateFrame("Frame", nil, frame, "BackdropTemplate")
     frame.menu = menu
     menu:SetSize(154, #ns.CLASSES * 23 + 12)
     menu:SetPoint("TOPLEFT", selector, "BOTTOMLEFT", 0, -2)
     menu:SetFrameLevel(frame:GetFrameLevel() + 10)
     ns.SetBackdrop(menu, { 0.075, 0.065, 0.045, 1 }, { 0.65, 0.51, 0.27, 1 })
+    frame.classOptions = {}
     for index, class in ipairs(ns.CLASSES) do
         local token, name = class.token, class.name
         local option = CreateFrame("Button", nil, menu)
@@ -123,17 +146,31 @@ function Settings:Create()
         option:SetPoint("TOPLEFT", 7, -6 - (index - 1) * 23)
         option:SetNormalFontObject("GameFontHighlight")
         option:SetText(name)
+        local text = option:GetFontString()
+        text:ClearAllPoints()
+        text:SetPoint("LEFT", 20, 0)
+        text:SetWidth(116)
+        text:SetJustifyH("LEFT")
+        text:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 11, "")
+        option.check = option:CreateTexture(nil, "ARTWORK")
+        option.check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+        option.check:SetSize(18, 18)
+        option.check:SetPoint("LEFT", 0, 0)
+        frame.classOptions[token] = option
         option:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
         local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[token]
         if color then option:GetFontString():SetTextColor(color.r, color.g, color.b) end
         option:SetScript("OnClick", function()
             Settings.classToken = token
             menu:Hide()
+            paintSelector()
             Settings:Refresh()
         end)
     end
     menu:Hide()
-    selector:SetScript("OnClick", function() menu:SetShown(not menu:IsShown()) end)
+    menu:SetScript("OnHide", function() paintSelector() end)
+    selector:SetScript("OnClick", function() menu:SetShown(not menu:IsShown()); paintSelector() end)
+    paintSelector()
     frame:SetScript("OnHide", function() menu:Hide(); GameTooltip:Hide() end)
 
     label(frame, "Healing abilities", 17, -80, "GameFontNormal")
@@ -166,7 +203,13 @@ function Settings:Refresh()
     local frame = self.frame
     if not frame then return end
     for _, class in ipairs(ns.CLASSES) do
-        if class.token == self.classToken then frame.selector:SetText(class.name .. "  v"); break end
+        if class.token == self.classToken then
+            frame.selector.title:SetText(class.name)
+            local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[class.token]
+            if color then frame.selector.title:SetTextColor(color.r, color.g, color.b)
+            else frame.selector.title:SetTextColor(1, 0.82, 0) end
+        end
+        frame.classOptions[class.token].check:SetShown(class.token == self.classToken)
     end
     local locked = ns.InCombat()
     local function paint(slot)

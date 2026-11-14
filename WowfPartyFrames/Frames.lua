@@ -69,11 +69,16 @@ local function decorateControls(card, preview)
                 button:SetAttribute("*type2", "target")
             end
             if kind == "heals" then
-                local x = (index - 1) % 2 * L.healSize + 6
-                local y = -6 - math.floor((index - 1) / 2) * L.healSize
+                local x = (index - 1) % 2 * L.healSize + L.healInset
+                local y = -L.healInset - math.floor((index - 1) / 2) * L.healSize
                 button:SetPoint("TOPLEFT", card.portraitArea, "TOPLEFT", x, y)
                 button:SetFrameLevel(card.portraitArea:GetFrameLevel() + 2)
                 button.border:SetAlpha(0)
+                if index > 2 then
+                    -- Keep bottom-quadrant ranks inside the circular portrait.
+                    button.rank:ClearAllPoints()
+                    button.rank:SetPoint("TOPLEFT", 0, -1)
+                end
             else
                 button:SetPoint("TOPLEFT", L.auraX + (index - 1) * L.auraPitch, L.buffY)
             end
@@ -331,7 +336,6 @@ local function paintResources(card, unit)
     card.power.text:SetFormattedText("%d / %d", current, maximum)
     local color = PowerBarColor and (PowerBarColor[powerToken] or PowerBarColor[power]) or {r=0.12,g=0.35,b=0.88}
     if color then card.power:SetStatusBarColor(color.r, color.g, color.b) end
-    card.resourceLabel:SetText(powerToken == "MANA" and "" or (_G[powerToken] or powerToken))
     local connected, dead = UnitIsConnected(unit), UnitIsDeadOrGhost(unit)
     card.status:SetText(public(connected) and connected == false and "Offline"
         or public(dead) and dead and "Dead" or "")
@@ -384,7 +388,7 @@ local function paintAuras(card, unit)
             if buff.state == "missing" then
                 button.border:SetColorTexture(1, 0.72, 0.12, 1)
                 button.icon:SetAlpha(1)
-                button.timer:SetText("Recast")
+                button.timer:SetText("+")
             elseif buff.state == "unknown" then
                 button.border:SetColorTexture(0.45, 0.45, 0.45, 1)
                 button.icon:SetAlpha(0.65)
@@ -457,7 +461,7 @@ function Frames:TogglePreview()
     self.preview = preview
     preview:SetAllPoints(self.anchor)
     local title = preview:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    title:SetPoint("TOPLEFT", preview, "BOTTOMLEFT", 86, -7)
+    title:SetPoint("TOPLEFT", preview, "BOTTOMLEFT", 50, -7)
     title:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 9, "OUTLINE")
     title:SetText("Preview  |  /wpf test to close")
     preview.cards = {}
@@ -483,7 +487,6 @@ function Frames:TogglePreview()
         card.power.text:SetFormattedText("%d / %d", sample[5], sample[6])
         local powerColor = PowerBarColor and PowerBarColor[sample[7]:upper()]
         if powerColor then card.power:SetStatusBarColor(powerColor.r, powerColor.g, powerColor.b) end
-        card.resourceLabel:SetText(sample[7] == "Mana" and "" or sample[7])
         card.healRate:SetFormattedText("Heal %d/s", sample[8])
         card.damageRate:SetFormattedText("Dmg %d/s", sample[9])
         card.netRate:SetFormattedText("Net %+d/s", sample[8] - sample[9])
@@ -495,7 +498,7 @@ function Frames:TogglePreview()
                 if kind == "buffs" and button.spellID then
                     button.buffState = slot == 1 and index == 2 and "missing" or "active"
                     button.glow:SetAlpha(button.buffState == "missing" and 1 or 0)
-                    button.timer:SetText(button.buffState == "missing" and "Recast" or (slot == 1 and "18m" or "12m"))
+                    button.timer:SetText(button.buffState == "missing" and "+" or (slot == 1 and "18m" or "12m"))
                 end
             end
         end

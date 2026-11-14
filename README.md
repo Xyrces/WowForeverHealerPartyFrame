@@ -2,14 +2,14 @@
 
 Vanilla-style party portraits and attached bars, with numerical health/resources, incoming healing and damage rates, visible debuffs, and class-based healing and buff assignments.
 
-Version **0.2.0** targets **WoW Forever 1.60.1.70862**, interface **16001**. The revised layout has been checked outside the client using the addon's Lua geometry and native artwork; it has **not yet been verified inside the game**. The [in-game checklist](tests/IN_GAME_CHECKLIST.md) covers the checks still needed.
+Version **0.2.1** targets **WoW Forever 1.60.1.70862**, interface **16001**. The revised layout has been checked outside the client using the addon's Lua geometry and native artwork; it has **not yet been verified inside the game**. The [in-game checklist](tests/IN_GAME_CHECKLIST.md) covers the checks still needed.
 
-The frames float directly over the game with no enclosing window, border, or background. Larger circular portraits, attached native bar trim, and compact aura rows restore the vanilla party-frame shape. The solo preview uses the same size, spacing, and saved position as the live frames. Settings remain a separate, smaller panel.
+The frames float directly over the game with no enclosing window, border, or background. Compact circular portraits, attached native bar trim, and aura rows retain the vanilla party-frame shape. Version 0.2.1 reduces portrait diameter from 84 to 54 UI units, bar width from 190 to 110, and row spacing from 124 to 90. Text is sized separately to remain readable, and the bar trim is no longer stretched to twice its native height. The solo preview uses the same size, spacing, and saved position as the live frames. Settings remain a separate panel.
 
 ## Install
 
 1. Close WoW or return to character selection.
-2. Extract `dist/WowfPartyFrames-0.2.0.zip` into your Forever client's `Interface/AddOns` folder. The resulting path should be `Interface/AddOns/WowfPartyFrames/WowfPartyFrames.toc`, with no extra nested folder.
+2. Extract `dist/WowfPartyFrames-0.2.1.zip` into your Forever client's `Interface/AddOns` folder. The resulting path should be `Interface/AddOns/WowfPartyFrames/WowfPartyFrames.toc`, with no extra nested folder.
 3. Enable **WoW Forever Party Frames** in the character-selection AddOns list and log in.
 4. Enter `/wpf settings` to assign spells, or `/wpf test` while solo to inspect the noncasting preview. For an already-enabled installation updated on disk, enter `/reload` yourself to load the new files.
 
@@ -17,7 +17,7 @@ Install into your own WoW Forever client's `Interface/AddOns` folder. Creating t
 
 ## Set up spells
 
-Select a **party-member class**, drag healing spells into the four portrait-quadrant slots, then drag buffs into the buff slots. Repeat for the classes you want to configure. There are no default spell assignments.
+Select a **party-member class** from the dropdown, drag healing spells into the four portrait-quadrant slots, then drag buffs into the buff slots. The dropdown uses a native arrow button, class-colored names, and a checkmark for the current selection. Repeat for the classes you want to configure. There are no default spell assignments.
 
 Use the exact rank you want from your spellbook: the addon saves that spell's ID instead of upgrading it to your highest rank. Different quadrants can contain different ranks of the same ability. Right-click a settings slot to clear it. Assignments save immediately and persist between sessions. Edits are locked during combat.
 
@@ -25,7 +25,7 @@ Use the exact rank you want from your spellbook: the addon saves that spell's ID
 
 - **Portraits and bars:** four floating party-member frames replace the native party frames, with class-colored names and numerical current/maximum health and resources. Their starting position follows the native party frame position; a custom position is preserved.
 - **Healing:** hover over a portrait to reveal four healing quadrants. Click a configured quadrant to cast its spell directly on that member without changing your current target.
-- **Buffs:** each member displays the buffs assigned to their class. Missing buffs are highlighted for reapplication. Left-click casts the assigned spell directly on that member without changing your selected target; right-click targets them. Active buffs remain clickable for an early refresh. Another rank of the same buff can count as present; reapplication still uses your assigned rank.
+- **Buffs:** each member displays the buffs assigned to their class. Missing buffs glow and show a `+` for reapplication. Left-click casts the assigned spell directly on that member without changing your selected target; right-click targets them. Active buffs remain clickable for an early refresh. Another rank of the same buff can count as present; reapplication still uses your assigned rank.
 - **Debuffs:** harmful effects remain visible without targeting the member. Readable Weakened Soul is prioritized. Timers and stacks appear when the client makes them available.
 - **Rates:** healing received, damage taken, and their signed difference use a trailing five-second window. Healing excludes overhealing; damage excludes overkill and absorbed damage. `+5/s` means effective healing exceeded damage by five health per second over that window.
 
@@ -46,6 +46,8 @@ Existing member assignments stay attached to their names when the party order ch
 | `/wpf blizzard` | Toggle the native party frames; this choice is saved. |
 
 Native party frames are hidden only after the replacement frames initialize successfully. Use `/wpf blizzard` outside combat to show them again if needed.
+
+The game's native party-control drawer for markers such as star, moon, and skull remains untouched. It appears when you are in a real group; a solo `/wpf test` preview does not create a group or open that drawer.
 
 Unlocking reveals a small text handle above the frames. Drag it and release to apply the new position, then lock it again. The preview uses class icons instead of character portraits, includes example assignments for empty slots without saving them, and closes when you join a group. Live frames show the actual party members' portraits and configured spells.
 

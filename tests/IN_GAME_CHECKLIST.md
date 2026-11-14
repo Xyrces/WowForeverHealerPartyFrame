@@ -10,12 +10,14 @@ Record the client build, addon version, pass/fail results, and exact error text 
 - [ ] While solo, `/wpf test` shows four floating vanilla-style frames with attached bars, class colors, numerical resources, and readable rates and aura rows. There is no enclosing window, border, background, or close button. A small caption identifies the preview, class icons stand in for portraits, and clicking casts nothing.
 - [ ] Portrait hover reveals four distinct spell quadrants; leaving the portrait restores the portrait image.
 - [ ] Test at the UI scale and screen resolution actually used in play. Names, resource totals, spell ranks, and timers do not overlap or become clipped.
+- [ ] Check the compact proportions against the native party frames: 54-unit portraits, 110-unit bars, and 90-unit row spacing. Bottom healing-quadrant rank labels stay inside the portrait, and three/four-digit rates remain readable.
 - [ ] `/wpf unlock` reveals a text handle. Dragging and releasing moves the frames; `/wpf lock` hides the handle. `/wpf reset` places the frames at the native party-frame position. Preview and live frames share that position, and a custom position survives `/reload`.
 - [ ] `/wpf blizzard` restores/hides native party frames and retains the choice after `/reload`.
 
 ## Simple settings and ranks
 
 - [ ] `/wpf settings` contains one recipient-class selector, four healing slots, and buff slots; fresh profiles have no preassigned spells.
+- [ ] The class dropdown has a native arrow graphic, hover/pressed feedback, class-colored names, and a checkmark for the selected class. Choosing a class closes the menu and updates the assignments.
 - [ ] Select Warrior and assign two ranks of one heal to different quadrants. The visible ranks match the spellbook.
 - [ ] Assign different spells to Mage. Returning to Warrior retains the Warrior assignments.
 - [ ] Drag a buff into the empty slot. Another empty slot appears, up to eight assigned buffs.
@@ -26,6 +28,7 @@ Record the client build, addon version, pass/fail results, and exact error text 
 ## Live party actions
 
 - [ ] Join a party while the preview is open. It closes automatically and live frames occupy the same position and use the same spacing. Each visible name, portrait, class, HP, and resource bar matches the member. `/wpf test` refuses to overlay sample frames while grouped.
+- [ ] The native party-control drawer remains available in a real group, including its party-marker controls. Its absence in the solo sample preview is expected.
 - [ ] Target one member, then heal a different member through each configured portrait quadrant. The intended member receives the intended rank and the original target remains selected.
 - [ ] Repeat with two ranks of the same heal, checking the cast/spellbook information and mana use as appropriate.
 - [ ] Missing assigned buffs offer reapplication; clicking applies the selected rank to the displayed member without changing the current target.
