@@ -2,6 +2,8 @@ local addonName, ns = ...
 local events = CreateFrame("Frame")
 ns.events = events
 local elapsedDisplay, elapsedAuras = 0, 0
+local predictionEvents = {UNIT_HEALTH=true, UNIT_MAXHEALTH=true, UNIT_HEAL_PREDICTION=true,
+    UNIT_ABSORB_AMOUNT_CHANGED=true, UNIT_HEAL_ABSORB_AMOUNT_CHANGED=true}
 
 local function start()
     if ns.started or ns.InCombat() then return end
@@ -58,6 +60,10 @@ SlashCmdList.WOWFPARTYFRAMES = function(input)
         local display = card and card.auraDisplay
         ns.Print("Aura display: " .. (display and display.supported and "built-in combat renderer." or "public API fallback."))
         if display and display.reason then ns.Print(display.reason) end
+        local prediction = card and card.healthPrediction
+        ns.Print("Health indicators: " .. (prediction and prediction.supported
+            and "native incoming heals, shields, and healing absorption." or "unavailable."))
+        if prediction and prediction.reason then ns.Print(prediction.reason) end
         if ns.Frames.pendingRoster then ns.Print("New party members will appear after combat ends.") end
     else
         ns.Print("/wpf, /wpf test, /wpf unlock, /wpf lock, /wpf reset, /wpf blizzard, /wpf status")
@@ -78,7 +84,7 @@ events:SetScript("OnEvent", function(_, event, name, second)
     end
     if event == "PLAYER_LEAVING_WORLD" then
         ns.worldActive = false
-        if ns.started then ns.PresetMenus:RefreshPrompts() end
+        if ns.started then ns.PresetMenus:RefreshPrompts(); ns.Frames:ClearPredictions() end
         return
     end
     if event == "ADDON_LOADED" then
@@ -116,6 +122,8 @@ events:SetScript("OnEvent", function(_, event, name, second)
             ns.Frames:RefreshAll(false)
         elseif event == "RAID_TARGET_UPDATE" then
             ns.Frames:RefreshMemberInfo()
+        elseif predictionEvents[event] then
+            ns.Frames:RefreshPredictions(name)
         end
         elapsedAuras = 1
     end
@@ -136,3 +144,4 @@ for _, event in ipairs({"ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD",
     "PLAYER_REGEN_DISABLED", "GROUP_ROSTER_UPDATE", "UNIT_NAME_UPDATE", "UNIT_AURA", "SPELLS_CHANGED", "SPELL_TEXT_UPDATE", "MODIFIER_STATE_CHANGED", "RAID_TARGET_UPDATE"}) do
     events:RegisterEvent(event)
 end
+for event in pairs(predictionEvents) do events:RegisterEvent(event) end

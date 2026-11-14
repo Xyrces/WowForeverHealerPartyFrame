@@ -49,6 +49,10 @@ Record the client build, addon version, pass/fail results, and exact error text 
 
 ## Live party actions
 
+- [ ] Cast a heal on an injured member and watch prediction extend their current health fill; cancel/finish it and verify the extension clears. Have someone else cast with none of your heals pending: their prediction and any following shield must begin at the correct position, without a gap. Health numbers and trim remain readable.
+- [ ] Apply a shield at partial and full health. Partial-health shield fill/pattern must align after incoming heals; a shield exceeding the available bar space shows the right-edge glow, including at full health. Consumption/expiry clears it. Check zero-health/dead members for stale or misplaced indicators.
+- [ ] Observe a healing-absorption effect: its pattern covers current health, incoming heals reduce the displayed remaining absorption, and overflow shows the left-edge glow. Removal clears the pattern and glow.
+- [ ] Repeat prediction/shield checks in combat, after combat party reordering, and after zoning. Indicators stay attached to the same named member, respect the health-bar edges, and never block target/cast/context-menu clicks. `/wpf status` reports native health indicators separately from unavailable rates.
 - [ ] Join a party while the preview is open. It closes automatically and live frames occupy the same position and use the same spacing. Each visible name, portrait, class, HP, and resource bar matches the member. `/wpf test` refuses to overlay sample frames while grouped.
 - [ ] The native party-control drawer remains available in a real group, including its party-marker controls. Its absence in the solo sample preview is expected.
 - [ ] Target one member, then heal a different member through each configured portrait quadrant. The intended member receives the intended rank and the original target remains selected.

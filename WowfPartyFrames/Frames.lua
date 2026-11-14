@@ -119,6 +119,7 @@ end
 
 local function decorateControls(card, preview)
     ns.Visuals:DecorateUnit(card)
+    if ns.HealthPrediction then ns.HealthPrediction:Create(card) end
     card.heals, card.buffs = {}, {}
     for _, kind in ipairs({"heals", "buffs"}) do
         for index = 1, kind == "heals" and 4 or ns.MAX_BUFFS do
@@ -309,6 +310,9 @@ function Frames:Create()
             local preset = ns.Profiles:GetPreset(self.presetID)
             GameTooltip:AddLine("Preset: " .. (preset and preset.name or "Default"), 1, 0.82, 0)
             GameTooltip:AddLine("Left-click to target. Right-click to assign a preset or open party actions.", 0.85, 0.85, 0.85, true)
+            if self.healthPrediction and self.healthPrediction.supported then
+                GameTooltip:AddLine("Health bar: incoming heals extend the fill; shields use a light pattern; healing absorption covers health. Edge glows indicate overflow.", 0.75, 0.9, 0.9, true)
+            end
             GameTooltip:AddLine("Rate bar: healing left, net center, damage right. Per second over the last 5 seconds.", 0.85, 0.85, 0.85, true)
             if self.rateStatus == "available" then
                 GameTooltip:AddLine(string.format("Healing %.1f/s  |  Net %+.1f/s  |  Damage %.1f/s",
@@ -548,6 +552,9 @@ function Frames:RefreshAll(refreshAuras)
         if unit and card:IsVisible() then
             paintHealing(card)
             paintResources(card, unit)
+            if ns.HealthPrediction then
+                ns.HealthPrediction:Update(card, ns.worldActive ~= false and unit or nil)
+            end
             local now = GetTime()
             if ns.MemberInfo and (not card.nextInfoUpdate or now >= card.nextInfoUpdate
                 or card.infoUnit ~= unit or card.infoPreset ~= card.presetID) then
@@ -561,6 +568,8 @@ function Frames:RefreshAll(refreshAuras)
             paintRates(card, unit)
             if refreshAuras then paintAuras(card, unit) end
             ns.Visuals:SetPortraitHover(card, portraitHovered(card))
+        elseif ns.HealthPrediction then
+            ns.HealthPrediction:Clear(card)
         end
     end
     if self.preview and self.preview:IsShown() then
@@ -569,6 +578,29 @@ function Frames:RefreshAll(refreshAuras)
             ns.Visuals:SetPortraitHover(card, portraitHovered(card))
         end
     end
+end
+
+function Frames:RefreshPredictions(changedUnit)
+    if not ns.HealthPrediction then return end
+    if changedUnit ~= nil and (not public(changedUnit, "string") or not changedUnit:match("^party[1-4]$")) then return end
+    for _, card in ipairs(self.cards) do
+        local unit = unitOf(card)
+        if not changedUnit or unit == changedUnit then
+            if unit and card:IsVisible() and ns.worldActive ~= false then
+                -- Health changes move the native fill edge that prediction
+                -- bars follow; update both together without reading its size.
+                paintResources(card, unit)
+                ns.HealthPrediction:Update(card, unit)
+            else
+                ns.HealthPrediction:Clear(card)
+            end
+        end
+    end
+end
+
+function Frames:ClearPredictions()
+    if not ns.HealthPrediction then return end
+    for _, card in ipairs(self.cards) do ns.HealthPrediction:Clear(card) end
 end
 
 function Frames:RefreshMemberInfo()
@@ -625,10 +657,10 @@ function Frames:TogglePreview()
     title:SetText("Preview  |  /wpf test to close")
     preview.cards = {}
     local samples = {
-        {"Thorin", "WARRIOR", 3240, 4500, 62, 100, "Rage", 50, 45},
-        {"Lyra", "MAGE", 1630, 2100, 2800, 3600, "Mana", 25, 38},
-        {"Elowen", "DRUID", 2410, 2800, 1920, 3100, "Mana", 32, 20},
-        {"Kael", "ROGUE", 2180, 2600, 80, 100, "Energy", 15, 15},
+        {"Thorin", "WARRIOR", 3240, 4500, 62, 100, "Rage", 50, 45, 650, 400, 450, 0},
+        {"Lyra", "MAGE", 2100, 2100, 2800, 3600, "Mana", 25, 38, 0, 0, 600, 0},
+        {"Elowen", "DRUID", 2410, 2800, 1920, 3100, "Mana", 32, 20, 100, 100, 0, 700},
+        {"Kael", "ROGUE", 2180, 2600, 80, 100, "Energy", 15, 15, 150, 0, 180, 0},
     }
     for index, sample in ipairs(samples) do
         local card = CreateFrame("Frame", nil, preview)
@@ -647,6 +679,11 @@ function Frames:TogglePreview()
         if coords then card.portrait:SetTexCoord(unpack(coords)) end
         card.health:SetMinMaxValues(0, sample[4]); card.health:SetValue(sample[3])
         card.health.text:SetFormattedText("%d / %d", sample[3], sample[4])
+        if ns.HealthPrediction then
+            ns.HealthPrediction:Preview(card, {health=sample[3], healthMax=sample[4],
+                totalIncomingHeals=sample[10], totalIncomingHealsFromHealer=sample[11],
+                totalDamageAbsorbs=sample[12], totalHealAbsorbs=sample[13]})
+        end
         card.power:SetMinMaxValues(0, sample[6]); card.power:SetValue(sample[5])
         card.power.text:SetFormattedText("%d / %d", sample[5], sample[6])
         local powerColor = PowerBarColor and PowerBarColor[sample[7]:upper()]
