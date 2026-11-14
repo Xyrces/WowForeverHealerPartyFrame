@@ -5,6 +5,7 @@ local COUNT, SIZE, GAP = 4, 36, 2
 local TYPES = {"Magic", "Disease", "Poison", "Curse"}
 local COLORS = {Magic={0.45,0.78,1}, Disease={0.84,0.65,0.36}, Poison={0.3,0.9,0.35}, Curse={0.75,0.45,1}}
 local FONT = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
+local QUESTION = "Interface\\Icons\\INV_Misc_QuestionMark"
 local function names(types)
     local result = {}
     for _, kind in ipairs(TYPES) do if types[kind] then result[#result + 1] = kind end end
@@ -16,16 +17,53 @@ local function position(frame, card, index)
         8 + math.floor((index-1)/2)*96, -4 - ((index-1)%2)*(SIZE+GAP))
 end
 
+local function createAction(card, index)
+    -- Keep the protected action outside the native aura hierarchy. Native
+    -- AuraButtons suppress addon-installed scripts, including child clicks.
+    local cast = CreateFrame("Button", nil, card, "SecureActionButtonTemplate")
+    cast:Hide()
+    position(cast, card, index)
+    cast:SetFrameLevel(card.portraitArea:GetFrameLevel()+10)
+    ns.Visuals:DecorateSpellButton(cast, SIZE)
+    cast.icon:SetDesaturated(true)
+    cast.icon:SetVertexColor(0.4, 0.4, 0.4)
+    cast:RegisterForClicks("AnyDown", "AnyUp")
+    cast:EnableMouse(true)
+    cast:SetAttribute("useparent-unit",true)
+    cast:SetAttribute("checkselfcast",false)
+    cast:SetAttribute("checkfocuscast",false)
+    cast:SetAttribute("checkmouseovercast",false)
+    cast:SetAttribute("type1",""); cast:SetAttribute("*type1","")
+    cast:SetAttribute("type2","togglemenu"); cast:SetAttribute("*type2","togglemenu")
+    local label = cast:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
+    label:SetFont(FONT,9,"OUTLINE"); label:SetPoint("LEFT",cast,"RIGHT",5,0)
+    label:SetWidth(50); label:SetJustifyH("LEFT"); label:SetWordWrap(true)
+    cast:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self,"ANCHOR_RIGHT")
+        if self.spellID then GameTooltip:SetSpellByID(self.spellID) end
+        GameTooltip:AddLine("Left-click to cleanse this party member.",1,0.82,0,true)
+        GameTooltip:AddLine("Grey: no matching alert. Color and glow: a removable debuff is present.",0.8,0.8,0.8,true)
+        GameTooltip:AddLine("Range, mana and cooldown still apply. Hover the debuff row for effect details.",0.8,0.8,0.8,true)
+        GameTooltip:Show()
+    end)
+    cast:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    return {cast=cast,label=label}
+end
+
 local function initialize(button, card, index, state)
     position(button, card, index)
-    button:SetFrameLevel(card.portraitArea:GetFrameLevel()+12)
-    button:SetAttribute("useparent-unit", true)
-    button:SetMouseClickEnabled(false)
-    button:SetTooltipAnchorPoint("ANCHOR_RIGHT")
+    local slot = state.slots[index]
+    button:SetFrameLevel(slot.cast:GetFrameLevel()+10)
+    -- Display-only overlay: both clicks and hover reach the ordinary action
+    -- below. Debuff details remain available on the separate native aura row.
+    button:EnableMouse(false)
     local icon = button:CreateTexture(nil, "ARTWORK")
-    icon:SetAllPoints(button)
+    icon:SetPoint("TOPLEFT",button,"TOPLEFT",1,-1)
+    icon:SetPoint("BOTTOMRIGHT",button,"BOTTOMRIGHT",-1,1)
     icon:SetTexCoord(0.07,0.93,0.07,0.93)
-    button:SetIcon(icon)
+    -- A static copy of the assigned removal spell, NOT the debuff's icon.
+    -- Native visibility reveals this full-color art above the grey action.
+    slot.activeIcon = icon
     local cooldown = CreateFrame("Cooldown", nil, button, "CooldownFrameTemplate")
     cooldown:SetAllPoints(button)
     cooldown:SetDrawEdge(false); cooldown:SetDrawBling(false)
@@ -49,38 +87,30 @@ local function initialize(button, card, index, state)
     glow:SetBlendMode("ADD"); glow:SetSize(SIZE*1.8,SIZE*1.8); glow:SetPoint("CENTER",button,"CENTER")
     button:AddDispelTypeTexture(glow, {showWhenHarmful=true,showWhenHelpful=false,
         style=Enum.CustomAuraButtonDispelTypeTextureStyle.PreserveAsset})
-    local label = overlay:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
-    label:SetFont(FONT,9,"OUTLINE"); label:SetPoint("LEFT",button,"RIGHT",5,0)
-    label:SetWidth(50); label:SetJustifyH("LEFT"); label:SetWordWrap(true)
+    slot.initialized = true
+end
 
-    -- The action is a CHILD of the native aura, not a persistent underlay.
-    -- Blizzard owns parent visibility. No addon script reads aura presence,
-    -- hides a protected button in combat, or leaves a transparent hitbox.
-    -- All attributes are assigned before combat. The parent-unit chain reaches
-    -- the named member card even when its secure header changes party tokens.
-    local cast = CreateFrame("Button", nil, button, "SecureActionButtonTemplate")
-    cast:SetAllPoints(button); cast:SetFrameLevel(overlay:GetFrameLevel()+2)
-    cast:RegisterForClicks("AnyDown", "AnyUp")
-    cast:SetMouseMotionEnabled(false)
-    cast:SetAttribute("useparent-unit",true)
-    cast:SetAttribute("checkselfcast",false)
-    cast:SetAttribute("checkfocuscast",false)
-    cast:SetAttribute("checkmouseovercast",false)
-    cast:SetAttribute("type1",""); cast:SetAttribute("*type1","")
-    cast:SetAttribute("type2","togglemenu"); cast:SetAttribute("*type2","togglemenu")
-    state.slots[index] = {cast=cast,label=label}
+local function disableActions(state)
+    -- Used only during setup/configuration outside combat, never on expiry.
+    for _,slot in ipairs(state.slots) do
+        slot.cast:Hide()
+        slot.cast:SetAttribute("type1",""); slot.cast:SetAttribute("*type1","")
+        slot.cast:SetAttribute("spell",nil)
+        slot.cast.spellID=nil
+    end
 end
 
 local function release(state)
     if not state or not state.container then return true end
     local ok = pcall(state.container.SetEnabled,state.container,false)
     state.unit=nil
-    -- Never mask a failed native hide with alpha: that would leave a live,
-    -- invisible action. Outside combat the container can also be hidden.
+    -- This container contains presentation only. Its visibility never changes
+    -- the separate, visibly grey protected casting buttons.
     if not ok then
         state.reason="Native cleanse display could not release its previous member."
         if not ns.InCombat() then
             state.configured=false
+            disableActions(state)
             pcall(state.container.Hide,state.container)
         end
     end
@@ -103,21 +133,22 @@ function Display:Create(card)
         end
         container:SetEnabled(false); container:EnableMouse(false)
         container:SetPoint("TOPLEFT",card,"TOPLEFT",0,0)
-        container:SetAttribute("useparent-unit",true)
         for index=1,COUNT do
             local slot=index
+            state.slots[slot]=createAction(card,slot)
             container:AddAuraSlot("cleanse"..slot,"HARMFUL|RAID",{
                 candidateFilters={includeDispelTypes={}},
                 initializeFrame=function(button) initialize(button,card,slot,state) end,
             })
             -- Native securecallfunction can report callback errors without
             -- rethrowing them to our pcall. Require the final success marker.
-            assert(state.slots[slot] and state.slots[slot].cast,"Native cleanse initialization did not complete")
+            assert(state.slots[slot].initialized,"Native cleanse initialization did not complete")
             container:SetAuraSlotEnabled("cleanse"..slot,false)
         end
     end)
     if not ok then
         release(state)
+        disableActions(state)
         if state.container then pcall(state.container.Hide,state.container) end
         state.reason="Cleanse setup failed: "..tostring(reason)
         return false
@@ -128,7 +159,9 @@ end
 
 local function signature(actions)
     local parts={}
-    for _,action in ipairs(actions) do parts[#parts+1]=action.spellID..":"..names(action.types) end
+    for _,action in ipairs(actions) do
+        parts[#parts+1]=action.spellID..":"..names(action.types)..":"..tostring(action.record and action.record.icon or QUESTION)
+    end
     return table.concat(parts,";")
 end
 
@@ -141,6 +174,7 @@ function Display:Configure(card)
     local key=signature(actions)
     if state.configured and state.signature==key then return true end
     if not release(state) then return false end
+    disableActions(state)
     local ok,reason=pcall(function()
         for index=1,COUNT do
             local slot,action=state.slots[index],actions[index]
@@ -148,19 +182,27 @@ function Display:Configure(card)
             slot.cast:SetAttribute("type1",action and "spell" or "")
             slot.cast:SetAttribute("*type1",action and "spell" or "")
             slot.cast:SetAttribute("spell",action and action.spellID or nil)
+            slot.cast.spellID=action and action.spellID or nil
+            local texture=action and action.record and action.record.icon or QUESTION
+            slot.cast.icon:SetTexture(texture)
+            slot.activeIcon:SetTexture(texture)
             slot.label:SetText(action and names(action.types) or "")
             state.container:SetAuraSlotCandidateFilters("cleanse"..index,{includeDispelTypes=action and action.types or {}})
             state.container:SetAuraSlotEnabled("cleanse"..index,action~=nil)
         end
         state.container:Show()
+        -- Publish only after every filter and action has been configured.
+        for index,slot in ipairs(state.slots) do slot.cast:SetShown(actions[index]~=nil) end
     end)
     if not ok then
         release(state); pcall(state.container.Hide,state.container)
+        disableActions(state)
         state.configured=false; state.reason="Cleanse configuration failed: "..tostring(reason)
         return false
     end
     state.configured,state.signature,state.actionCount=true,key,#actions
     state.reason=nil
+    self:Update(card,card:GetAttribute("unit"))
     return true
 end
 
@@ -192,7 +234,7 @@ function Display:GetStatus(card)
     if state and state.reason then return state.reason end
     if not state or not state.supported then return "unavailable." end
     if not state.configured or state.actionCount==0 then return "no learned or assigned removal abilities." end
-    return "native removable-debuff controls; "..state.actionCount.." assigned actions."
+    return "visible cleanse buttons with native alerts; "..state.actionCount.." assigned actions."
 end
 
 -- Synthetic sample states only; preview controls never receive cast attributes.
@@ -220,13 +262,16 @@ function Display:Preview(card)
         end
         local action=actions[index]
         local active=action and (card.previewIndex==4 or card.previewIndex==index+1)
-        button:SetShown(active~=nil and active~=false)
+        button:SetShown(action~=nil)
         if action then
             button.spellID=action.spellID
             button.icon:SetTexture(action.record.icon)
+            button.icon:SetDesaturated(not active)
+            local shade=active and 1 or 0.4
+            button.icon:SetVertexColor(shade,shade,shade)
             button.label:SetText(names(action.types))
-            button.timer:SetText(index==1 and "8s" or "24s")
-            button.glow:SetAlpha(1)
+            button.timer:SetText(active and (index==1 and "8s" or "24s") or "")
+            button.glow:SetAlpha(active and 1 or 0)
             local color=COLORS[action.key] or COLORS.Magic
             button.glow:SetVertexColor(unpack(color))
         end

@@ -11,7 +11,11 @@ local function initializeIcon(button, clickThrough)
     -- Unassigned aura icons retain native hover details, while clicks reach
     -- the member frame beneath them for targeting and the context menu.
     button:SetMouseClickEnabled(false)
-    if clickThrough then button:EnableMouse(false) end
+    -- Native OnEnter/OnLeave own aura details, including secret combat auras.
+    -- Enable motion explicitly; disabling clicks must not also lose hover.
+    -- Assigned-buff overlays leave both input paths to the cast button below.
+    button:SetMouseMotionEnabled(not clickThrough)
+    button:SetHideTooltipInCombat(false)
     local icon = button:CreateTexture(nil, "ARTWORK")
     icon:SetAllPoints(button)
     icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)

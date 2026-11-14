@@ -291,7 +291,7 @@ function Frames:ApplyProfiles()
     if self.anchor and ns.Cleanses then
         local count = #ns.Cleanses:GetActions()
         -- Reserve screen-clamping space, without widening the member's target
-        -- button underneath the conditional cleanse controls.
+        -- button underneath the separate cleanse controls.
         local width = count > 0 and L.portraitX + L.portrait + 8 + math.floor((count-1)/2)*96 + 91 or L.width
         self.anchor:SetWidth(math.max(L.width, width))
     end
