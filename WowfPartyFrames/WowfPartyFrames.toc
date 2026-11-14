@@ -1,0 +1,16 @@
+## Interface: 16001
+## Title: WoW Forever Party Frames
+## Notes: Vanilla portraits, numerical resources, class-assigned healing and buffs.
+## Author: jtn50
+## Version: 0.1.0
+## SavedVariables: WowfPartyFramesDB
+
+Bootstrap.lua
+Profiles.lua
+Spells.lua
+Rates.lua
+Auras.lua
+FrameVisuals.lua
+Frames.lua
+Settings.lua
+Core.lua
