@@ -3,6 +3,7 @@ local Frames = { headers = {}, cards = {}, pendingRoster = false }
 ns.Frames = Frames
 local QUESTION = "Interface\\Icons\\INV_Misc_QuestionMark"
 local EMPTY_NAME = "__WOWF_NO_MEMBER__"
+local L = ns.Layout
 
 local function public(value, kind)
     return not ns.IsSecret(value) and (not kind or type(value) == kind)
@@ -57,7 +58,7 @@ local function decorateControls(card, preview)
             -- secure header's current unit token, including combat reorders.
             local button = CreateFrame("Button", nil, card, not preview and "SecureActionButtonTemplate" or nil)
             button.kind, button.index, button.card, button.preview = kind, index, card, preview
-            ns.Visuals:DecorateSpellButton(button, kind == "heals" and 29 or 24)
+            ns.Visuals:DecorateSpellButton(button, kind == "heals" and L.healSize or L.auraSize)
             if not preview then
                 button:RegisterForClicks("AnyDown", "AnyUp")
                 button:SetAttribute("useparent-unit", true)
@@ -68,13 +69,13 @@ local function decorateControls(card, preview)
                 button:SetAttribute("*type2", "target")
             end
             if kind == "heals" then
-                local x = (index - 1) % 2 * 30 + 3
-                local y = -3 - math.floor((index - 1) / 2) * 30
+                local x = (index - 1) % 2 * L.healSize + 6
+                local y = -6 - math.floor((index - 1) / 2) * L.healSize
                 button:SetPoint("TOPLEFT", card.portraitArea, "TOPLEFT", x, y)
                 button:SetFrameLevel(card.portraitArea:GetFrameLevel() + 2)
                 button.border:SetAlpha(0)
             else
-                button:SetPoint("TOPLEFT", 112 + (index - 1) * 28, -112)
+                button:SetPoint("TOPLEFT", L.auraX + (index - 1) * L.auraPitch, L.buffY)
             end
             button:SetScript("OnEnter", function(self) spellTooltip(self) end)
             button:SetScript("OnLeave", hideTooltip)
@@ -110,18 +111,22 @@ local function configureSpell(button, id)
     button.icon:SetTexture(spell and spell.icon or QUESTION)
     button.icon:SetDesaturated(false)
     local rank = spell and spell.rank or ""
-    button.rank:SetText(button.kind == "heals" and (rank:match("%d+") or "") or "")
+    local rankNumber = rank:match("%d+")
+    button.rank:SetText(button.kind == "heals" and rankNumber and ("R" .. rankNumber) or "")
     if button.kind == "buffs" then button:SetShown(id ~= nil) end
 end
 
 function Frames:ApplyProfiles()
     if ns.InCombat() then self.pendingProfiles = true; return false end
     for _, card in ipairs(self.cards) do
+        local hasBuffs = false
         for _, kind in ipairs({"heals", "buffs"}) do
             for index, button in ipairs(card[kind]) do
                 configureSpell(button, ns.Profiles:GetSpell(card.classToken, kind, index))
+                if kind == "buffs" and button.spellID then hasBuffs = true end
             end
         end
+        card.buffLabel:SetText(hasBuffs and "Buffs" or "")
     end
     self.pendingProfiles = false
     return true
@@ -132,23 +137,28 @@ function Frames:Create()
     if ns.InCombat() then return false end
     local anchor = CreateFrame("Frame", "WowfPartyFramesAnchor", UIParent)
     self.anchor = anchor
-    anchor:SetSize(360, 584)
+    anchor:SetSize(L.width, L.pitch * 3 + L.height)
     anchor:SetMovable(true)
     anchor:SetClampedToScreen(true)
     local p = ns.db.position
-    anchor:SetPoint(p.point, UIParent, p.relativePoint, p.x, p.y)
     anchor:SetScale(ns.db.scale)
+    if p.point == "TOPLEFT" and p.relativePoint == "TOPLEFT"
+        and ((p.x == 24 and p.y == -190) or (p.x == 16 and p.y == -128)) then
+        self:PositionAtNative()
+    else
+        anchor:SetPoint(p.point, UIParent, p.relativePoint, p.x, p.y)
+    end
 
     for index = 1, 4 do
         local header = CreateFrame("Frame", "WowfPartyFramesHeader" .. index, anchor, "SecureGroupHeaderTemplate")
         header:Hide()
         header:SetAttribute("_ignore", true)
         header:SetAttribute("template", "SecureUnitButtonTemplate")
-        header:SetAttribute("initialConfigFunction", [[
-            self:SetWidth(360); self:SetHeight(142);
+        header:SetAttribute("initialConfigFunction", string.format([[
+            self:SetWidth(%d); self:SetHeight(%d);
             self:SetAttribute("type1", "target");
             self:SetAttribute("type2", "togglemenu");
-        ]])
+        ]], L.width, L.height))
         header:SetAttribute("showParty", true)
         header:SetAttribute("showRaid", false)
         header:SetAttribute("showPlayer", false)
@@ -159,7 +169,7 @@ function Frames:Create()
         header:SetAttribute("maxColumns", 1)
         header:SetAttribute("point", "TOPLEFT")
         header:SetAttribute("_ignore", nil)
-        header:SetPoint("TOPLEFT", anchor, "TOPLEFT", 0, -(index - 1) * 148)
+        header:SetPoint("TOPLEFT", anchor, "TOPLEFT", 0, -(index - 1) * L.pitch)
         -- Blizzard's updater allocates child1 even for an empty name list.
         SecureGroupHeader_Update(header)
         local card = header:GetAttribute("child1")
@@ -185,14 +195,14 @@ function Frames:Create()
     end
     -- The move handle is independent of the protected anchor so it can hide
     -- safely if combat begins while the frames are unlocked.
-    local mover = CreateFrame("Button", "WowfPartyFramesMover", UIParent, "BackdropTemplate")
+    local mover = CreateFrame("Button", "WowfPartyFramesMover", UIParent)
     self.mover = mover
-    mover:SetSize(360, 24)
+    mover:SetSize(L.width, 24)
     mover:SetMovable(true)
     mover:SetClampedToScreen(true)
     mover:SetFrameStrata("DIALOG")
-    ns.SetBackdrop(mover)
-    mover.text = mover:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    mover.text = mover:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    mover.text:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
     mover.text:SetPoint("CENTER")
     mover.text:SetText("Drag party frames  |  /wpf lock")
     mover:RegisterForDrag("LeftButton")
@@ -246,16 +256,31 @@ end
 function Frames:ResetPosition()
     if ns.InCombat() then return false, "Reset the position after combat ends." end
     self:StopMoving()
-    self.anchor:ClearAllPoints()
-    self.anchor:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 24, -190)
+    self:PositionAtNative()
     self:SavePosition()
     if self.unlocked then self:SetUnlocked(true) end
     return true
 end
 
+function Frames:PositionAtNative()
+    if ns.InCombat() then return end
+    self.anchor:ClearAllPoints()
+    local native = PartyFrame or PartyMemberFrame1
+    if native then
+        local left, top = native:GetLeft(), native:GetTop()
+        if public(left, "number") and public(top, "number") then
+            local factor = native:GetEffectiveScale() / self.anchor:GetEffectiveScale()
+            self.anchor:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left * factor, top * factor)
+            return
+        end
+    end
+    self.anchor:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 16, -128)
+end
+
 function Frames:RefreshRoster()
     if not self.anchor then return false end
     if ns.InCombat() then self.pendingRoster = true; return false end
+    if self.preview and (GetNumSubgroupMembers() > 0 or IsInRaid()) then self.preview:Hide() end
     local members, nameCounts = {}, {}
     for index = 1, 4 do
         local unit = "party" .. index
@@ -306,7 +331,7 @@ local function paintResources(card, unit)
     card.power.text:SetFormattedText("%d / %d", current, maximum)
     local color = PowerBarColor and (PowerBarColor[powerToken] or PowerBarColor[power]) or {r=0.12,g=0.35,b=0.88}
     if color then card.power:SetStatusBarColor(color.r, color.g, color.b) end
-    card.resourceLabel:SetText(_G[powerToken] or powerToken)
+    card.resourceLabel:SetText(powerToken == "MANA" and "" or (_G[powerToken] or powerToken))
     local connected, dead = UnitIsConnected(unit), UnitIsDeadOrGhost(unit)
     card.status:SetText(public(connected) and connected == false and "Offline"
         or public(dead) and dead and "Dead" or "")
@@ -321,15 +346,15 @@ local function paintRates(card, unit)
     local heal, damage, net, status = ns.Rates:Get(unit)
     card.rateStatus = status
     if status == "available" then
-        card.healRate:SetFormattedText("H +%.0f/s", heal)
-        card.damageRate:SetFormattedText("D -%.0f/s", damage)
-        card.netRate:SetFormattedText("%+.0f/s", net)
+        card.healRate:SetFormattedText("Heal %.0f/s", heal)
+        card.damageRate:SetFormattedText("Dmg %.0f/s", damage)
+        card.netRate:SetFormattedText("Net %+.0f/s", net)
         if net > 0 then card.netRate:SetTextColor(0.35, 1, 0.45)
         elseif net < 0 then card.netRate:SetTextColor(1, 0.36, 0.3)
         else card.netRate:SetTextColor(0.85, 0.85, 0.8) end
     else
-        card.healRate:SetText("H --/s")
-        card.damageRate:SetText("D --/s")
+        card.healRate:SetText("Heal --/s")
+        card.damageRate:SetText("Dmg --/s")
         card.netRate:SetText(status == "Collecting rates" and "Collecting" or "Unavailable")
         card.netRate:SetTextColor(0.65, 0.65, 0.65)
     end
@@ -355,17 +380,18 @@ local function paintAuras(card, unit)
                 button.icon:SetTexture(spell and spell.icon or QUESTION)
             end
             button.icon:SetDesaturated(buff.state ~= "active")
+            button.glow:SetAlpha(buff.state == "missing" and 1 or 0)
             if buff.state == "missing" then
                 button.border:SetColorTexture(1, 0.72, 0.12, 1)
                 button.icon:SetAlpha(1)
-                button.timer:SetText("+")
+                button.timer:SetText("Recast")
             elseif buff.state == "unknown" then
                 button.border:SetColorTexture(0.45, 0.45, 0.45, 1)
                 button.icon:SetAlpha(0.65)
                 button.timer:SetText("?")
             else
                 button.border:SetColorTexture(0.38, 0.5, 0.35, 1)
-                button.icon:SetAlpha(0.85)
+                button.icon:SetAlpha(1)
             end
         end
     end
@@ -423,25 +449,17 @@ end
 
 function Frames:TogglePreview()
     if ns.InCombat() then return false, "Open the preview after combat ends." end
+    if GetNumSubgroupMembers() > 0 or IsInRaid() then
+        return false, "Your party frames are already live. Preview is available while solo."
+    end
     if self.preview then self.preview:SetShown(not self.preview:IsShown()); return true end
-    local preview = CreateFrame("Frame", "WowfPartyFramesPreview", UIParent, "BackdropTemplate")
+    local preview = CreateFrame("Frame", "WowfPartyFramesPreview", self.anchor)
     self.preview = preview
-    preview:SetSize(384, 642)
-    preview:SetPoint("CENTER", UIParent, "CENTER", 260, 0)
-    preview:SetFrameStrata("DIALOG")
-    ns.SetBackdrop(preview)
-    preview:EnableMouse(true)
-    preview:SetMovable(true)
-    preview:SetClampedToScreen(true)
-    preview:RegisterForDrag("LeftButton")
-    preview:SetScript("OnDragStart", function(self) self:StartMoving() end)
-    preview:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
-    local title = preview:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    title:SetPoint("TOPLEFT", 12, -14)
-    title:SetText("PREVIEW - sample data, no casting")
-    local close = CreateFrame("Button", nil, preview, "UIPanelCloseButton")
-    close:SetPoint("TOPRIGHT", -2, -2)
-    close:SetScript("OnClick", function() preview:Hide() end)
+    preview:SetAllPoints(self.anchor)
+    local title = preview:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    title:SetPoint("TOPLEFT", preview, "BOTTOMLEFT", 86, -7)
+    title:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 9, "OUTLINE")
+    title:SetText("Preview  |  /wpf test to close")
     preview.cards = {}
     local samples = {
         {"Thorin", "WARRIOR", 3240, 4500, 62, 100, "Rage", 50, 45},
@@ -451,25 +469,34 @@ function Frames:TogglePreview()
     }
     for index, sample in ipairs(samples) do
         local card = CreateFrame("Frame", nil, preview)
-        card:SetPoint("TOPLEFT", 12, -40 - (index - 1) * 148)
+        card:SetPoint("TOPLEFT", 0, -(index - 1) * L.pitch)
         decorateControls(card, true)
         preview.cards[index] = card
         local color = colorFor(sample[2])
         card.name:SetText(sample[1]); card.name:SetTextColor(color.r, color.g, color.b)
-        SetPortraitTexture(card.portrait, "player")
+        card.portrait:SetTexture("Interface\\TargetingFrame\\UI-Classes-Circles")
+        local coords = CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[sample[2]]
+        if coords then card.portrait:SetTexCoord(unpack(coords)) end
         card.health:SetMinMaxValues(0, sample[4]); card.health:SetValue(sample[3])
         card.health.text:SetFormattedText("%d / %d", sample[3], sample[4])
         card.power:SetMinMaxValues(0, sample[6]); card.power:SetValue(sample[5])
         card.power.text:SetFormattedText("%d / %d", sample[5], sample[6])
         local powerColor = PowerBarColor and PowerBarColor[sample[7]:upper()]
         if powerColor then card.power:SetStatusBarColor(powerColor.r, powerColor.g, powerColor.b) end
-        card.resourceLabel:SetText(sample[7])
-        card.healRate:SetFormattedText("H +%d/s", sample[8])
-        card.damageRate:SetFormattedText("D -%d/s", sample[9])
-        card.netRate:SetFormattedText("%+d/s", sample[8] - sample[9])
+        card.resourceLabel:SetText(sample[7] == "Mana" and "" or sample[7])
+        card.healRate:SetFormattedText("Heal %d/s", sample[8])
+        card.damageRate:SetFormattedText("Dmg %d/s", sample[9])
+        card.netRate:SetFormattedText("Net %+d/s", sample[8] - sample[9])
+        card.netRate:SetTextColor(sample[8] >= sample[9] and 0.4 or 1, sample[8] >= sample[9] and 1 or 0.4, 0.35)
+        local exampleSpells = {heals={2050,2052,2061,139}, buffs={1243,14752,976}}
         for _, kind in ipairs({"heals", "buffs"}) do
             for slot, button in ipairs(card[kind]) do
-                configureSpell(button, ns.Profiles:GetSpell(sample[2], kind, slot))
+                configureSpell(button, ns.Profiles:GetSpell(sample[2], kind, slot) or exampleSpells[kind][slot])
+                if kind == "buffs" and button.spellID then
+                    button.buffState = slot == 1 and index == 2 and "missing" or "active"
+                    button.glow:SetAlpha(button.buffState == "missing" and 1 or 0)
+                    button.timer:SetText(button.buffState == "missing" and "Recast" or (slot == 1 and "18m" or "12m"))
+                end
             end
         end
         for slot, button in ipairs(card.debuffs) do

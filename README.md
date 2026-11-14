@@ -2,14 +2,16 @@
 
 Vanilla-style party portraits and attached bars, with numerical health/resources, incoming healing and damage rates, visible debuffs, and class-based healing and buff assignments.
 
-Version **0.1.0** targets **WoW Forever 1.60.1.70862**, interface **16001**. This is an initial build; it has **not yet been tested inside the game**. The [in-game checklist](tests/IN_GAME_CHECKLIST.md) covers the checks still needed.
+Version **0.2.0** targets **WoW Forever 1.60.1.70862**, interface **16001**. The revised layout has been checked outside the client using the addon's Lua geometry and native artwork; it has **not yet been verified inside the game**. The [in-game checklist](tests/IN_GAME_CHECKLIST.md) covers the checks still needed.
+
+The frames float directly over the game with no enclosing window, border, or background. Larger circular portraits, attached native bar trim, and compact aura rows restore the vanilla party-frame shape. The solo preview uses the same size, spacing, and saved position as the live frames. Settings remain a separate, smaller panel.
 
 ## Install
 
 1. Close WoW or return to character selection.
-2. Extract `dist/WowfPartyFrames-0.1.0.zip` into your Forever client's `Interface/AddOns` folder. The resulting path should be `Interface/AddOns/WowfPartyFrames/WowfPartyFrames.toc`, with no extra nested folder.
+2. Extract `dist/WowfPartyFrames-0.2.0.zip` into your Forever client's `Interface/AddOns` folder. The resulting path should be `Interface/AddOns/WowfPartyFrames/WowfPartyFrames.toc`, with no extra nested folder.
 3. Enable **WoW Forever Party Frames** in the character-selection AddOns list and log in.
-4. Enter `/wpf settings` to assign spells, or `/wpf test` to inspect the noncasting preview.
+4. Enter `/wpf settings` to assign spells, or `/wpf test` while solo to inspect the noncasting preview. For an already-enabled installation updated on disk, enter `/reload` yourself to load the new files.
 
 Install into your own WoW Forever client's `Interface/AddOns` folder. Creating the package does not install it into the game.
 
@@ -21,7 +23,7 @@ Use the exact rank you want from your spellbook: the addon saves that spell's ID
 
 ## Use the frames
 
-- **Portraits and bars:** four party-member frames retain the vanilla silhouette, with class-colored names and numerical current/maximum health and resources.
+- **Portraits and bars:** four floating party-member frames replace the native party frames, with class-colored names and numerical current/maximum health and resources. Their starting position follows the native party frame position; a custom position is preserved.
 - **Healing:** hover over a portrait to reveal four healing quadrants. Click a configured quadrant to cast its spell directly on that member without changing your current target.
 - **Buffs:** each member displays the buffs assigned to their class. Missing buffs are highlighted for reapplication. Left-click casts the assigned spell directly on that member without changing your selected target; right-click targets them. Active buffs remain clickable for an early refresh. Another rank of the same buff can count as present; reapplication still uses your assigned rank.
 - **Debuffs:** harmful effects remain visible without targeting the member. Readable Weakened Soul is prioritized. Timers and stacks appear when the client makes them available.
@@ -38,12 +40,14 @@ Existing member assignments stay attached to their names when the party order ch
 | `/wpf settings` | Open the class, healing, and buff settings. |
 | `/wpf unlock` | Allow moving the party frames outside combat. |
 | `/wpf lock` | Lock their position. |
-| `/wpf reset` | Restore the starting position. |
-| `/wpf test` | Toggle a noncasting visual preview; preview values are examples. |
+| `/wpf reset` | Move to the native party frame position. |
+| `/wpf test` | While solo, toggle a noncasting preview at the live frame position. |
 | `/wpf status` | Show addon and data-availability status. |
 | `/wpf blizzard` | Toggle the native party frames; this choice is saved. |
 
 Native party frames are hidden only after the replacement frames initialize successfully. Use `/wpf blizzard` outside combat to show them again if needed.
+
+Unlocking reveals a small text handle above the frames. Drag it and release to apply the new position, then lock it again. The preview uses class icons instead of character portraits, includes example assignments for empty slots without saving them, and closes when you join a group. Live frames show the actual party members' portraits and configured spells.
 
 ## Validation
 

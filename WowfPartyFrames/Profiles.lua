@@ -47,7 +47,7 @@ function Profiles:Init(saved)
     saved.position = {
         point = type(p.point) == "string" and points[p.point] and p.point or "TOPLEFT",
         relativePoint = type(p.relativePoint) == "string" and points[p.relativePoint] and p.relativePoint or "TOPLEFT",
-        x = coordinate(p.x, 24), y = coordinate(p.y, -190),
+        x = coordinate(p.x, 16), y = coordinate(p.y, -128),
     }
     saved.scale = type(saved.scale) == "number" and saved.scale >= 0.5 and saved.scale <= 2 and saved.scale or 1
     saved.version = 1

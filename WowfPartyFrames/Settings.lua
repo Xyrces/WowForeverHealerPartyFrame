@@ -2,9 +2,15 @@ local _, ns = ...
 local Settings = {}
 ns.Settings = Settings
 local QUADRANT_LABELS = { "Top left", "Top right", "Bottom left", "Bottom right" }
+local WIDTH, BUFF_TOP, BUFF_ROW = 340, 232, 76
 
 local function label(parent, text, x, y, template)
     local result = parent:CreateFontString(nil, "OVERLAY", template or "GameFontNormal")
+    if result.SetFont then
+        local size = template == "GameFontNormalLarge" and 16
+            or template == "GameFontNormal" and 13 or 10
+        result:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", size, "")
+    end
     result:SetPoint("TOPLEFT", x, y)
     result:SetText(text)
     return result
@@ -30,22 +36,34 @@ end
 
 local function createSlot(parent, kind, index, x, y, width)
     local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
-    button:SetSize(width, 48)
+    local buff = kind == "buffs"
+    button:SetSize(width, buff and 66 or 48)
     button:SetPoint("TOPLEFT", x, y)
     button.kind, button.index = kind, index
-    ns.SetBackdrop(button, { 0.06, 0.05, 0.035, 0.95 }, { 0.45, 0.37, 0.23, 1 })
+    local border = button:CreateTexture(nil, "BACKGROUND")
+    border:SetSize(36, 36)
+    border:SetPoint("TOPLEFT", buff and (width - 36) / 2 or 0, -2)
+    border:SetColorTexture(0.58, 0.46, 0.26, 1)
     button.icon = button:CreateTexture(nil, "ARTWORK")
     button.icon:SetSize(32, 32)
-    button.icon:SetPoint("LEFT", 7, 0)
+    button.icon:SetPoint("CENTER", border, "CENTER")
     button.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-    button.title = label(button, "", 46, -7, "GameFontHighlightSmall")
-    button.title:SetWidth(width - 52)
-    button.title:SetJustifyH("LEFT")
-    button.title:SetWordWrap(false)
-    button.rank = label(button, "", 46, -27, "GameFontNormalSmall")
-    button.rank:SetWidth(width - 52)
-    button.rank:SetJustifyH("LEFT")
+    button.title = label(button, "", buff and 0 or 43, buff and -41 or -5, "GameFontHighlightSmall")
+    button.title:SetWidth(buff and width or width - 43)
+    button.title:SetHeight(buff and 24 or 16)
+    button.title:SetJustifyH(buff and "CENTER" or "LEFT")
+    button.title:SetWordWrap(buff)
+    button.rank = label(button, "", buff and 0 or 43, buff and -25 or -24, "GameFontNormalSmall")
+    button.rank:SetWidth(buff and width or width - 43)
+    button.rank:SetJustifyH(buff and "CENTER" or "LEFT")
     button.rank:SetWordWrap(false)
+    button.rank:SetShadowColor(0, 0, 0, 1)
+    button.rank:SetShadowOffset(1, -1)
+    if buff then
+        button.plus = label(button, "+", 0, -8, "GameFontNormalLarge")
+        button.plus:SetWidth(width)
+        button.plus:SetJustifyH("CENTER")
+    end
     button:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
     button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     button:SetScript("OnReceiveDrag", function(self) Settings:Assign(self, false) end)
@@ -73,7 +91,7 @@ function Settings:Create()
     local frame = CreateFrame("Frame", "WowfPartyFramesSettings", UIParent, "BackdropTemplate")
     self.frame = frame
     self.classToken = ns.CLASSES[1].token
-    frame:SetSize(490, 570)
+    frame:SetSize(WIDTH, 330)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("DIALOG")
     frame:EnableMouse(true)
@@ -83,26 +101,26 @@ function Settings:Create()
     frame:SetScript("OnDragStart", function(self) self:StartMoving() end)
     frame:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
     ns.SetBackdrop(frame, { 0.075, 0.065, 0.045, 0.98 }, { 0.65, 0.51, 0.27, 1 })
-    label(frame, "WoW Forever Party Frames", 22, -22, "GameFontNormalLarge")
+    label(frame, "Party Frame Settings", 17, -17, "GameFontNormalLarge")
     local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -3, -3)
     close:SetScript("OnClick", function() frame:Hide() end)
-    label(frame, "Party-member class", 22, -61)
+    label(frame, "Party-member class", 17, -53, "GameFontHighlightSmall")
     local selector = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     frame.selector = selector
-    selector:SetSize(215, 26)
-    selector:SetPoint("TOPRIGHT", -22, -54)
+    selector:SetSize(154, 24)
+    selector:SetPoint("TOPRIGHT", -17, -46)
     local menu = CreateFrame("Frame", nil, frame, "BackdropTemplate")
     frame.menu = menu
-    menu:SetSize(215, #ns.CLASSES * 25 + 12)
+    menu:SetSize(154, #ns.CLASSES * 23 + 12)
     menu:SetPoint("TOPLEFT", selector, "BOTTOMLEFT", 0, -2)
     menu:SetFrameLevel(frame:GetFrameLevel() + 10)
     ns.SetBackdrop(menu, { 0.075, 0.065, 0.045, 1 }, { 0.65, 0.51, 0.27, 1 })
     for index, class in ipairs(ns.CLASSES) do
         local token, name = class.token, class.name
         local option = CreateFrame("Button", nil, menu)
-        option:SetSize(201, 25)
-        option:SetPoint("TOPLEFT", 7, -6 - (index - 1) * 25)
+        option:SetSize(140, 23)
+        option:SetPoint("TOPLEFT", 7, -6 - (index - 1) * 23)
         option:SetNormalFontObject("GameFontHighlight")
         option:SetText(name)
         option:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
@@ -118,23 +136,19 @@ function Settings:Create()
     selector:SetScript("OnClick", function() menu:SetShown(not menu:IsShown()) end)
     frame:SetScript("OnHide", function() menu:Hide(); GameTooltip:Hide() end)
 
-    label(frame, "Healing abilities", 22, -101)
-    label(frame, "Drag spells into the matching portrait quadrants.", 22, -121, "GameFontHighlightSmall")
+    label(frame, "Healing abilities", 17, -80, "GameFontNormal")
     self.healSlots, self.buffSlots = {}, {}
     for index = 1, 4 do
-        local x = 22 + ((index - 1) % 2) * 227
-        local y = -145 - math.floor((index - 1) / 2) * 56
-        self.healSlots[index] = createSlot(frame, "heals", index, x, y, 219)
+        local x = 17 + ((index - 1) % 2) * 157
+        local y = -103 - math.floor((index - 1) / 2) * 52
+        self.healSlots[index] = createSlot(frame, "heals", index, x, y, 149)
     end
-    label(frame, "Buffs", 22, -272)
-    label(frame, "Track and reapply these buffs for this class.", 22, -292, "GameFontHighlightSmall")
+    label(frame, "Buffs", 17, -210, "GameFontNormal")
     for index = 1, ns.MAX_BUFFS do
-        local x = 22 + ((index - 1) % 2) * 227
-        local y = -315 - math.floor((index - 1) / 2) * 53
-        self.buffSlots[index] = createSlot(frame, "buffs", index, x, y, 219)
+        self.buffSlots[index] = createSlot(frame, "buffs", index, 17, -BUFF_TOP, 72)
     end
-    frame.note = label(frame, "", 22, -537, "GameFontHighlightSmall")
-    frame.note:SetWidth(446)
+    frame.note = label(frame, "", 17, -304, "GameFontHighlightSmall")
+    frame.note:SetWidth(WIDTH - 34)
     frame.note:SetJustifyH("LEFT")
     frame.note:SetWordWrap(true)
     frame:RegisterEvent("PLAYER_REGEN_DISABLED")
@@ -161,24 +175,38 @@ function Settings:Refresh()
         slot.icon:SetTexture(spell and spell.icon or "Interface\\PaperDoll\\UI-Backpack-EmptySlot")
         slot.icon:SetDesaturated(locked)
         slot:SetAlpha(locked and 0.55 or 1)
-        slot.title:SetText(spell and spell.name or (id and ("Spell #" .. id) or "Drop spell here"))
+        slot.title:SetText(spell and spell.name or (id and ("Spell #" .. id)
+            or (slot.kind == "buffs" and "Add buff" or "Drop spell")))
         local rank = spell and spell.rank or ""
         if slot.kind == "heals" then
-            slot.rank:SetText(QUADRANT_LABELS[slot.index] .. (rank ~= "" and (" - " .. rank) or ""))
+            slot.rank:SetText(rank ~= "" and rank or QUADRANT_LABELS[slot.index])
         else
-            slot.rank:SetText(rank ~= "" and rank or (id and "Assigned buff" or "Add a buff"))
+            slot.rank:SetText(rank:match("%d+") or "")
+            slot.plus:SetText(id and "" or "+")
         end
     end
     for _, slot in ipairs(self.healSlots) do paint(slot) end
-    local firstEmpty
+    local firstEmpty, visible = nil, {}
     for index, slot in ipairs(self.buffSlots) do
         local configured = ns.Profiles:GetSpell(self.classToken, "buffs", index) ~= nil
         if not configured and not firstEmpty then firstEmpty = index end
-        slot:SetShown(configured or index == firstEmpty)
+        if configured then visible[#visible + 1] = slot else slot:Hide() end
         paint(slot)
     end
+    if firstEmpty then visible[#visible + 1] = self.buffSlots[firstEmpty] end
+    -- Display order is compact, while each button retains its saved slot index.
+    for position, slot in ipairs(visible) do
+        slot:ClearAllPoints()
+        slot:SetPoint("TOPLEFT", 17 + ((position - 1) % 4) * 78,
+            -BUFF_TOP - math.floor((position - 1) / 4) * BUFF_ROW)
+        slot:Show()
+    end
+    local rows = math.max(1, math.ceil(#visible / 4))
+    frame:SetHeight(330 + (rows - 1) * BUFF_ROW)
+    frame.note:ClearAllPoints()
+    frame.note:SetPoint("TOPLEFT", 17, -304 - (rows - 1) * BUFF_ROW)
     frame.note:SetText(locked and "Assignments are locked during combat."
-        or "Exact spell ranks are saved. Right-click a slot to clear it.")
+        or "Drag spells here. Ranks are saved. Right-click to clear.")
 end
 
 function Settings:Toggle()

@@ -7,10 +7,10 @@ Record the client build, addon version, pass/fail results, and exact error text 
 ## Load and appearance
 
 - [ ] The addon appears in the AddOns list and loads without Lua errors.
-- [ ] `/wpf test` shows four vanilla-style portraits with attached bars, class colors, numerical resources, and readable rates and aura rows. It is clearly a preview and clicking it casts nothing.
+- [ ] While solo, `/wpf test` shows four floating vanilla-style frames with attached bars, class colors, numerical resources, and readable rates and aura rows. There is no enclosing window, border, background, or close button. A small caption identifies the preview, class icons stand in for portraits, and clicking casts nothing.
 - [ ] Portrait hover reveals four distinct spell quadrants; leaving the portrait restores the portrait image.
 - [ ] Test at the UI scale and screen resolution actually used in play. Names, resource totals, spell ranks, and timers do not overlap or become clipped.
-- [ ] `/wpf unlock`, moving, `/wpf lock`, and `/wpf reset` behave as described. The saved position survives `/reload`.
+- [ ] `/wpf unlock` reveals a text handle. Dragging and releasing moves the frames; `/wpf lock` hides the handle. `/wpf reset` places the frames at the native party-frame position. Preview and live frames share that position, and a custom position survives `/reload`.
 - [ ] `/wpf blizzard` restores/hides native party frames and retains the choice after `/reload`.
 
 ## Simple settings and ranks
@@ -25,7 +25,7 @@ Record the client build, addon version, pass/fail results, and exact error text 
 
 ## Live party actions
 
-- [ ] Turn the preview off and join a party. Each visible name, portrait, class, HP, and resource bar matches the member.
+- [ ] Join a party while the preview is open. It closes automatically and live frames occupy the same position and use the same spacing. Each visible name, portrait, class, HP, and resource bar matches the member. `/wpf test` refuses to overlay sample frames while grouped.
 - [ ] Target one member, then heal a different member through each configured portrait quadrant. The intended member receives the intended rank and the original target remains selected.
 - [ ] Repeat with two ranks of the same heal, checking the cast/spellbook information and mana use as appropriate.
 - [ ] Missing assigned buffs offer reapplication; clicking applies the selected rank to the displayed member without changing the current target.
