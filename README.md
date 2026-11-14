@@ -8,12 +8,16 @@ The frames float directly over the game with no enclosing window, border, or bac
 
 ## Install
 
+Download the addon ZIP from the [latest GitHub release](https://github.com/Xyrces/WowForeverHealerPartyFrame/releases/latest), not GitHub's automatic source-code archive.
+
 1. Close WoW or return to character selection.
-2. Extract `dist/WowfPartyFrames-0.8.1.zip` into your Forever client's `Interface/AddOns` folder. The resulting path should be `Interface/AddOns/WowfPartyFrames/WowfPartyFrames.toc`, with no extra nested folder.
+2. Extract the downloaded `WowfPartyFrames-0.8.1.zip` into your Forever client's `Interface/AddOns` folder. The resulting path should be `Interface/AddOns/WowfPartyFrames/WowfPartyFrames.toc`, with no extra nested folder.
 3. Enable **WoW Forever Party Frames** in the character-selection AddOns list and log in.
 4. Enter `/wpf settings` to assign spells, or `/wpf test` while solo to inspect the noncasting preview. For an already-enabled installation updated on disk, enter `/reload` yourself to load the new files.
 
 Install into your own WoW Forever client's `Interface/AddOns` folder. Creating the package does not install it into the game.
+
+The repository includes [reconstructed release history](https://github.com/Xyrces/WowForeverHealerPartyFrame/blob/main/HISTORY.md) from twenty saved release packages, plus the current development tests and packaging tools. Historical snapshot commits are explicitly marked; they are not an original development-time Git log.
 
 ## Set up spells
 
