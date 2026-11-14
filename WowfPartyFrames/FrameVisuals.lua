@@ -2,9 +2,10 @@ local _, ns = ...
 local Visuals = {}
 ns.Visuals = Visuals
 -- Shared by live frames and preview; no separate mockup geometry.
-ns.Layout = {width=270, height=120, pitch=130, portrait=82, portraitInner=74,
+ns.Layout = {width=270, height=128, pitch=138, portrait=82, portraitInner=74,
     portraitX=184, healSize=36, healGap=2, healInset=4, auraSize=16, auraPitch=17, auraX=44,
-    debuffY=-64, activeBuffY=-84, buffY=-104, barX=5, barWidth=174, rateY=-48, rateHeight=12}
+    debuffY=-76, buffY=-96, barX=5, barWidth=174, rateY=-60, rateHeight=12,
+    infoY=-15, locationY=-116}
 local L = ns.Layout
 local MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local FONT = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
@@ -58,7 +59,7 @@ end
 
 local function barTrim(card)
     local trim = CreateFrame("Frame", nil, card)
-    trim:SetPoint("TOPLEFT", 0, -15)
+    trim:SetPoint("TOPLEFT", 0, -27)
     trim:SetSize(L.barWidth + 10, 33)
     trim:SetFrameLevel(card.health:GetFrameLevel() + 2)
     trim:EnableMouse(false)
@@ -212,8 +213,8 @@ end
 
 function Visuals:DecorateUnit(card)
     card:SetSize(L.width, L.height)
-    card.health = statusBar(card, -20, 12, 0.10, 0.75, 0.12)
-    card.power = statusBar(card, -34, 10, 0.12, 0.28, 0.88)
+    card.health = statusBar(card, -32, 12, 0.10, 0.75, 0.12)
+    card.power = statusBar(card, -46, 10, 0.12, 0.28, 0.88)
     barTrim(card)
     local area = CreateFrame("Frame", nil, card)
     card.portraitArea = area
@@ -233,19 +234,21 @@ function Visuals:DecorateUnit(card)
     card.name = text(card, L.barX, 0, L.barWidth - 40, 12)
     card.status = text(card, L.barX + L.barWidth - 36, -2, 36, 9, "RIGHT")
     card.status:SetTextColor(0.82, 0.8, 0.72)
+    card.memberInfo = text(card, L.barX, L.infoY, L.barWidth, 9)
+    card.memberInfo:SetTextColor(0.78, 0.78, 0.74)
+    card.presetLabel = text(card, L.portraitX, -87, L.portrait, 9, "CENTER")
+    card.presetLabel:SetTextColor(0.88, 0.78, 0.53)
+    card.location = text(card, L.barX, L.locationY, L.barWidth, 8)
+    card.location:SetTextColor(0.7, 0.77, 0.85)
     rateBar(card)
     self:PaintRates(card, nil, nil, nil, "Collecting rates")
     card.debuffLabel = text(card, L.barX, L.debuffY - 4, 35, 8, "RIGHT")
     card.debuffLabel:SetText("Debuffs")
     card.debuffLabel:SetTextColor(0.9, 0.8, 0.72)
     card.buffLabel = text(card, L.barX, L.buffY - 4, 35, 8, "RIGHT")
-    card.buffLabel:SetText("Recast")
+    card.buffLabel:SetText("Buffs")
     card.buffLabel:SetTextColor(0.9, 0.86, 0.7)
-    card.activeBuffLabel = text(card, L.barX, L.activeBuffY - 4, 35, 8, "RIGHT")
-    card.activeBuffLabel:SetText("Buffs")
-    card.activeBuffLabel:SetTextColor(0.9, 0.86, 0.7)
     card.debuffs = {}
-    card.activeBuffs = {}
     for index = 1, 8 do
         local button = CreateFrame("Button", nil, card)
         self:DecorateSpellButton(button, L.auraSize)
@@ -255,10 +258,6 @@ function Visuals:DecorateUnit(card)
         button.rim:SetSize(L.auraSize + 3, L.auraSize + 3)
         button.rim:SetVertexColor(0.8, 0.2, 0.15)
         card.debuffs[index] = button
-        local helpful = CreateFrame("Button", nil, card)
-        self:DecorateSpellButton(helpful, L.auraSize)
-        helpful:SetPoint("TOPLEFT", L.auraX + (index - 1) * L.auraPitch, L.activeBuffY)
-        card.activeBuffs[index] = helpful
     end
     local guides = CreateFrame("Frame", nil, area)
     guides:SetAllPoints()

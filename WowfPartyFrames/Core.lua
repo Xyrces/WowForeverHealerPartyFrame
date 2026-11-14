@@ -7,6 +7,7 @@ local function start()
     if ns.started or ns.InCombat() then return end
     ns.db = ns.Profiles:Init(WowfPartyFramesDB)
     ns.Assignments:Init(ns.db)
+    if ns.Spells.RefreshCache then ns.Spells:RefreshCache() end
     if ns.worldSeen then ns.Assignments:BeginSession(ns.isReloadingUI) end
     ns.Rates:Initialize()
     if not ns.Frames:Create() then return end
@@ -90,6 +91,7 @@ events:SetScript("OnEvent", function(_, event, name, second)
     if event == "PLAYER_LOGIN" or event == "PLAYER_REGEN_ENABLED" then
         start()
         if ns.started then
+            if ns.Spells.RefreshCache then ns.Spells:RefreshCache() end
             if ns.worldSeen then ns.Assignments:BeginSession(ns.isReloadingUI) end
             if ns.Frames.positionDirty then ns.Frames:SavePosition() end
             ns.Frames:RefreshRoster()
@@ -107,6 +109,7 @@ events:SetScript("OnEvent", function(_, event, name, second)
                 and type(name) == "string" and name:match("^party[1-4]$")) then
             ns.Frames:RefreshRoster()
         elseif event == "SPELLS_CHANGED" or event == "SPELL_TEXT_UPDATE" then
+            if ns.Spells.RefreshCache then ns.Spells:RefreshCache() end
             ns.Frames:ApplyProfiles()
         elseif event == "MODIFIER_STATE_CHANGED" then
             -- Secure actions are already configured; only icons/tooltips change.

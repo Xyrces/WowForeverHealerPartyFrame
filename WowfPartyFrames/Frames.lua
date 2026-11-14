@@ -77,7 +77,8 @@ local function spellTooltip(button)
             GameTooltip:AddLine(ns.QUADRANTS[button.index] .. " | " .. (LAYER_NAMES[button.activeLayer] or "Base"), 1, 0.82, 0)
         else
             local state = button.buffState
-            local note = state == "missing" and "Missing - click to reapply to this member."
+            local note = state == "native" and "Click to refresh or reapply to this member."
+                or state == "missing" and "Missing - click to reapply to this member."
                 or state == "active" and "Active - click to refresh on this member."
                 or "Buff status unavailable - click to cast on this member."
             GameTooltip:AddLine(note, 1, 0.82, 0, true)
@@ -156,7 +157,6 @@ local function decorateControls(card, preview)
     end
     local displayButtons = {}
     for _, button in ipairs(card.debuffs) do button.auraFilter = "HARMFUL"; displayButtons[#displayButtons + 1] = button end
-    for _, button in ipairs(card.activeBuffs) do button.auraFilter = "HELPFUL"; displayButtons[#displayButtons + 1] = button end
     for _, button in ipairs(displayButtons) do
         button.card = card
         button:SetScript("OnEnter", function(self)
@@ -213,13 +213,11 @@ end
 local function applyCardProfile(card)
     card.presetID = card.previewIndex and (ns.Settings and ns.Settings.presetID or "default")
         or card.memberKey and ns.Assignments:GetPreset(card.memberKey) or nil
-    local hasBuffs = false
     for _, kind in ipairs({"heals", "buffs"}) do
         for index, button in ipairs(card[kind]) do
             local id = ns.Profiles:GetSpell(card.presetID, kind, index)
             configureSpell(button, id)
             if kind == "buffs" and button.spellID then
-                hasBuffs = true
                 if card.previewIndex then
                     button.buffState = index == 1 and card.previewIndex == 2 and "missing" or "active"
                     button.glow:SetAlpha(button.buffState == "missing" and 1 or 0)
@@ -228,7 +226,11 @@ local function applyCardProfile(card)
             end
         end
     end
-    card.buffLabel:SetText(hasBuffs and "Recast" or "")
+    card.buffLabel:SetText("Buffs")
+    card.nextInfoUpdate = nil
+    local preset = ns.Profiles:GetPreset(card.presetID)
+    card.presetLabel:SetText("Preset: " .. (preset and preset.name or "Default"))
+    if not card.previewIndex and ns.AuraDisplay then ns.AuraDisplay:ConfigureBuffs(card) end
     ns.Visuals:ApplyControlStyle(card)
     paintHealing(card)
 end
@@ -295,6 +297,9 @@ function Frames:Create()
         card:SetScript("OnEnter", function(self)
             openTooltip(self)
             GameTooltip:SetText(self.memberName or "Party member")
+            local details = ns.MemberInfo and ns.MemberInfo:Get(unitOf(self), self.presetID)
+            if details and details.summary ~= "" then GameTooltip:AddLine(details.summary, 0.85, 0.85, 0.8) end
+            if details and details.location then GameTooltip:AddLine("Location: " .. details.location, 0.7, 0.8, 1) end
             local preset = ns.Profiles:GetPreset(self.presetID)
             GameTooltip:AddLine("Preset: " .. (preset and preset.name or "Default"), 1, 0.82, 0)
             GameTooltip:AddLine("Left-click to target. Right-click to assign a preset or open party actions.", 0.85, 0.85, 0.85, true)
@@ -480,8 +485,7 @@ local function paintRates(card, unit)
 end
 
 local function paintAuras(card, unit)
-    for _, view in ipairs({{card.debuffs, card.debuffLabel, "Debuffs", "GetDebuffs"},
-        {card.activeBuffs, card.activeBuffLabel, "Buffs", "GetHelpfulAuras"}}) do
+    for _, view in ipairs({{card.debuffs, card.debuffLabel, "Debuffs", "GetDebuffs"}}) do
         local entries, known = {}, card.nativeAuras
         if not card.nativeAuras and ns.Auras[view[4]] then
             entries, known = ns.Auras[view[4]](ns.Auras, unit, 8)
@@ -498,7 +502,11 @@ local function paintAuras(card, unit)
     end
     for _, button in ipairs(card.buffs) do
         if button.spellID then
-            local buff = ns.Auras:GetAssignedBuff(unit, button.spellID)
+            -- Native slots cover the recast face while the aura is active.
+            -- Their secret match/visibility stays entirely inside Blizzard's
+            -- renderer; the secure button underneath keeps its exact spell.
+            local buff = card.nativeAuras and {state="native"}
+                or ns.Auras:GetAssignedBuff(unit, button.spellID)
             button.buffState = buff.state
             ns.Auras:Paint(button, unit, buff.aura)
             if buff.state ~= "active" then
@@ -507,7 +515,7 @@ local function paintAuras(card, unit)
             end
             button.icon:SetDesaturated(buff.state ~= "active")
             button.glow:SetAlpha(buff.state == "missing" and 1 or 0)
-            if buff.state == "missing" then
+            if buff.state == "missing" or buff.state == "native" then
                 button.border:SetColorTexture(1, 0.72, 0.12, 1)
                 button.icon:SetAlpha(1)
                 button.timer:SetText("+")
@@ -534,6 +542,15 @@ function Frames:RefreshAll(refreshAuras)
         if unit and card:IsVisible() then
             paintHealing(card)
             paintResources(card, unit)
+            local now = GetTime()
+            if ns.MemberInfo and (not card.nextInfoUpdate or now >= card.nextInfoUpdate
+                or card.infoUnit ~= unit or card.infoPreset ~= card.presetID) then
+                local info = ns.MemberInfo:Get(unit, card.presetID)
+                card.memberInfo:SetText(info.summary)
+                card.presetLabel:SetText("Preset: " .. info.preset)
+                card.location:SetText(info.location or "")
+                card.infoUnit, card.infoPreset, card.nextInfoUpdate = unit, card.presetID, now + 1
+            end
             paintRates(card, unit)
             if refreshAuras then paintAuras(card, unit) end
             ns.Visuals:SetPortraitHover(card, portraitHovered(card))
@@ -609,6 +626,10 @@ function Frames:TogglePreview()
         preview.cards[index] = card
         local color = colorFor(sample[2])
         card.name:SetText(sample[1]); card.name:SetTextColor(color.r, color.g, color.b)
+        local className = sample[2]
+        for _, class in ipairs(ns.CLASSES) do if class.token == sample[2] then className = class.name; break end end
+        card.memberInfo:SetText("24 " .. className .. (index == 1 and " · Tank" or index == 3 and " · Healer" or " · Damage"))
+        card.location:SetText(index == 4 and "Westfall" or "")
         card.portrait:SetTexture("Interface\\TargetingFrame\\UI-Classes-Circles")
         local coords = CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[sample[2]]
         if coords then card.portrait:SetTexCoord(unpack(coords)) end
@@ -625,14 +646,6 @@ function Frames:TogglePreview()
             if slot == 1 then
                 button.icon:SetTexture("Interface\\Icons\\Spell_Holy_AshesToAshes")
                 button.timer:SetText("12")
-            end
-        end
-        for slot, button in ipairs(card.activeBuffs) do
-            button:SetShown(slot <= 3)
-            if slot <= 3 then
-                button.icon:SetTexture(({"Interface\\Icons\\Spell_Holy_WordFortitude",
-                    "Interface\\Icons\\Spell_Holy_DivineSpirit", "Interface\\Icons\\Spell_Shadow_AntiShadow"})[slot])
-                button.timer:SetText(slot == 1 and "18m" or "12m")
             end
         end
         ns.Visuals:SetPortraitHover(card, false)

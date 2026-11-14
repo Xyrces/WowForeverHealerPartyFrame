@@ -10,7 +10,8 @@ Record the client build, addon version, pass/fail results, and exact error text 
 - [ ] While solo, `/wpf test` shows four floating vanilla-style frames with attached bars, class colors, numerical resources, and readable rates and aura rows. There is no enclosing window, border, background, or close button. A small caption identifies the preview, class icons stand in for portraits, and clicking casts nothing.
 - [ ] Portraits appear on the right of the bars. Portrait hover reveals four full square buttons in Buttons mode, or circular quadrants in Quadrants mode. Switching modes retains all spells, persists across reload, and is refused during combat. Leaving the controls restores the portrait.
 - [ ] Test at the UI scale and screen resolution actually used in play. Names, resource totals, spell ranks, and timers do not overlap or become clipped.
-- [ ] Check 82-unit portraits, 36×36 healing buttons, 174-unit bars, and 130-unit row spacing. The existing native silver trim, green health and resource fills keep their appearance. Ranks remain inside both control styles; eight debuffs, eight active buffs, and preset recast buttons fit on separate rows without overlapping controls.
+- [ ] Check 82-unit portraits, 36×36 healing buttons, 174-unit bars, and 138-unit member spacing. The existing native silver trim, green health and resource fills keep their appearance. Ranks remain inside both control styles; eight debuffs and eight combined buff icons fit on two rows without overlapping controls or information labels.
+- [ ] Confirm level/class/assigned role under the name and the selected preset below the portrait. Long preset names are available in the frame tooltip. A member in a different zone shows that zone; same-zone members and unavailable location data leave the location line empty. Changes and combat reorders must follow the correct member.
 - [ ] Hover spells on the top and bottom member. Tooltips sit outside the party stack. Move the stack near the right edge and verify tooltips switch to its left.
 - [ ] The minimap AddOns menu has exactly one WoW Forever Party Frames entry. Clicking opens the same settings as `/wpf`; repeated zoning/reload does not duplicate it.
 - [ ] `/wpf unlock` reveals a text handle. Dragging and releasing moves the frames; `/wpf lock` hides the handle. `/wpf reset` places the frames at the native party-frame position. Preview and live frames share that position, and a custom position survives `/reload`.
@@ -57,10 +58,11 @@ Record the client build, addon version, pass/fail results, and exact error text 
 - [ ] Right-click the body, healing buttons, and buffs with every modifier combination; the same native member menu and preset submenu remain available. Modified left-clicks on buffs retain their assigned buff and displayed member.
 - [ ] Existing Shift/Ctrl keyboard binds outside these mouse controls still work. If another click-casting addon is enabled, check it does not take ownership of these same buttons.
 - [ ] Active buffs show their available timers/stacks. Let one expire and verify that its missing-state display returns.
-- [ ] Apply another rank of an assigned buff and verify it is recognized as present when aura data is readable.
+- [ ] Apply another known spellbook rank of an assigned buff and verify it is recognized in the same slot, including in combat. Change the configured rank outside combat and verify the active aura does not duplicate; a click must still use the newly assigned exact rank.
 - [ ] `/wpf status` reports the built-in combat renderer on supported clients. Active Buffs and Debuffs keep their icons, remaining time, and stacks when combat starts; removals disappear normally and new auras appear. Expiring buffs do not vanish solely because the combat state changed.
 - [ ] Reorder the party during combat and verify both native aura rows immediately follow the same named member as the health bars and click actions. An unresolved or failed native binding must never show a different member's auras.
-- [ ] Recast buttons remain clickable when their state is unknown. An unknown `?` is not a missing-buff glow; the active Buffs row remains independent.
+- [ ] There is no separate Recast row. Native active icons remain clickable through to the underlying secure buff button; expiry reveals that same slot's `+`. Other helpful auras fill remaining slots without duplicating configured buff families. With all eight buff slots configured, extras are omitted; with none configured, up to eight active buffs remain visible.
+- [ ] Known spell icons persist through combat. If an icon is still a question mark after reloading out of combat, record the configured spell and rank; this may indicate an unavailable or invalid spell ID rather than a display-state problem.
 - [ ] Observe Weakened Soul on a party member while another member is targeted. Confirm it remains visible with other debuffs.
 - [ ] Observe dead, disconnected, and out-of-range members; the display remains understandable and casts fail normally rather than hitting someone else.
 
@@ -72,7 +74,7 @@ Record the client build, addon version, pass/fail results, and exact error text 
 - [ ] In a context allowing combat data, incoming damage increases the red portion from the right and effective healing increases the green portion from the left. The split shows their relative proportions. Overhealing does not inflate healing/sec.
 - [ ] The displayed delta equals healing/sec minus damage/sec, allowing for rounding. Activity ages out after five seconds, returning available idle rates to zero.
 - [ ] Equal nonzero rates split the bar evenly. Healing-only is green, damage-only is red, and zero/zero leaves an empty track with zero values. Unavailable data clears old fills and numbers. Large values fit using compact notation, with unabridged rates in the unit tooltip.
-- [ ] If the client restricts combat data, rates show Rates unavailable and unknown recast buffs are not falsely advertised as missing. Native active-aura displays should continue. `/wpf status` explains availability and the selected aura renderer.
+- [ ] If the client restricts combat data, rates show Rates unavailable. Native aura slots should continue matching and displaying assigned buffs in place. If native rendering is unavailable, the public fallback marks unknown assigned buffs `?`. `/wpf status` explains availability and the selected aura renderer.
 
 ## Combat and roster stability
 
