@@ -2,14 +2,14 @@
 
 Vanilla-style party portraits and attached bars, with numerical health/resources, incoming healing and damage rates, visible debuffs, and class-based healing and buff assignments.
 
-Version **0.2.2** targets **WoW Forever 1.60.1.70862**, interface **16001**. The revised layout has been checked outside the client using the addon's Lua geometry and native artwork; it has **not yet been verified inside the game**. The [in-game checklist](tests/IN_GAME_CHECKLIST.md) covers the checks still needed.
+Version **0.2.3** targets **WoW Forever 1.60.1.70862**, interface **16001**. This update fixes a portrait-hover error that interrupted spell assignment before clearing the cursor and repainting settings. An open preview now updates immediately when class assignments change. The fix passes offline integration tests; in-game confirmation is pending. The [in-game checklist](tests/IN_GAME_CHECKLIST.md) covers the checks still needed.
 
 The frames float directly over the game with no enclosing window, border, or background. Compact circular portraits, attached native bar trim, and aura rows retain the vanilla party-frame shape. Version 0.2.1 reduces portrait diameter from 84 to 54 UI units, bar width from 190 to 110, and row spacing from 124 to 90. Text is sized separately to remain readable, and the bar trim is no longer stretched to twice its native height. The solo preview uses the same size, spacing, and saved position as the live frames. Settings remain a separate panel.
 
 ## Install
 
 1. Close WoW or return to character selection.
-2. Extract `dist/WowfPartyFrames-0.2.2.zip` into your Forever client's `Interface/AddOns` folder. The resulting path should be `Interface/AddOns/WowfPartyFrames/WowfPartyFrames.toc`, with no extra nested folder.
+2. Extract `dist/WowfPartyFrames-0.2.3.zip` into your Forever client's `Interface/AddOns` folder. The resulting path should be `Interface/AddOns/WowfPartyFrames/WowfPartyFrames.toc`, with no extra nested folder.
 3. Enable **WoW Forever Party Frames** in the character-selection AddOns list and log in.
 4. Enter `/wpf settings` to assign spells, or `/wpf test` while solo to inspect the noncasting preview. For an already-enabled installation updated on disk, enter `/reload` yourself to load the new files.
 

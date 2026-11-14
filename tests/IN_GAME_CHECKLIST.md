@@ -19,6 +19,7 @@ Record the client build, addon version, pass/fail results, and exact error text 
 - [ ] `/wpf settings` contains one recipient-class selector, four healing slots, and buff slots; fresh profiles have no preassigned spells.
 - [ ] The class dropdown has a native arrow graphic, hover/pressed feedback, class-colored names, and a checkmark for the selected class. Choosing a class closes the menu and updates the assignments.
 - [ ] Select Warrior and assign two ranks of one heal to different quadrants. The visible ranks match the spellbook.
+- [ ] With the solo preview open, drop a different spell or rank into a settings slot. The cursor clears and both settings and the matching preview quadrant update immediately, with no Lua errors. Preview buttons still cast nothing.
 - [ ] Assign different spells to Mage. Returning to Warrior retains the Warrior assignments.
 - [ ] Drag a buff into the empty slot. Another empty slot appears, up to eight assigned buffs.
 - [ ] Right-click a middle buff slot to clear it; remaining assignments stay intact and the empty slot can be reused.

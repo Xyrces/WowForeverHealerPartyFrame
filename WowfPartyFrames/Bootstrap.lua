@@ -1,6 +1,6 @@
 local addonName, ns = ...
 ns.name = addonName
-ns.VERSION = "0.2.2"
+ns.VERSION = "0.2.3"
 ns.MAX_BUFFS = 8
 ns.WINDOW_SECONDS = 5
 ns.QUADRANTS = { "Top left", "Top right", "Bottom left", "Bottom right" }

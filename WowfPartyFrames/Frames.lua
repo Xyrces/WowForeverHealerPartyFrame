@@ -4,9 +4,15 @@ ns.Frames = Frames
 local QUESTION = "Interface\\Icons\\INV_Misc_QuestionMark"
 local EMPTY_NAME = "__WOWF_NO_MEMBER__"
 local L = ns.Layout
+local EXAMPLE_SPELLS = {heals={2050,2052,2061,139}, buffs={1243,14752,976}}
 
 local function public(value, kind)
     return not ns.IsSecret(value) and (not kind or type(value) == kind)
+end
+
+local function portraitHovered(card)
+    local hovered = card.portraitArea:IsMouseOver()
+    return public(hovered, "boolean") and hovered
 end
 
 local function unitOf(card)
@@ -121,17 +127,31 @@ local function configureSpell(button, id)
     if button.kind == "buffs" then button:SetShown(id ~= nil) end
 end
 
-function Frames:ApplyProfiles()
-    if ns.InCombat() then self.pendingProfiles = true; return false end
-    for _, card in ipairs(self.cards) do
-        local hasBuffs = false
-        for _, kind in ipairs({"heals", "buffs"}) do
-            for index, button in ipairs(card[kind]) do
-                configureSpell(button, ns.Profiles:GetSpell(card.classToken, kind, index))
-                if kind == "buffs" and button.spellID then hasBuffs = true end
+local function applyCardProfile(card)
+    local hasBuffs = false
+    for _, kind in ipairs({"heals", "buffs"}) do
+        for index, button in ipairs(card[kind]) do
+            local id = ns.Profiles:GetSpell(card.classToken, kind, index)
+            if card.previewIndex then id = id or EXAMPLE_SPELLS[kind][index] end
+            configureSpell(button, id)
+            if kind == "buffs" and button.spellID then
+                hasBuffs = true
+                if card.previewIndex then
+                    button.buffState = index == 1 and card.previewIndex == 2 and "missing" or "active"
+                    button.glow:SetAlpha(button.buffState == "missing" and 1 or 0)
+                    button.timer:SetText(button.buffState == "missing" and "+" or (index == 1 and "18m" or "12m"))
+                end
             end
         end
-        card.buffLabel:SetText(hasBuffs and "Buffs" or "")
+    end
+    card.buffLabel:SetText(hasBuffs and "Buffs" or "")
+end
+
+function Frames:ApplyProfiles()
+    if ns.InCombat() then self.pendingProfiles = true; return false end
+    for _, card in ipairs(self.cards) do applyCardProfile(card) end
+    if self.preview then
+        for _, card in ipairs(self.preview.cards) do applyCardProfile(card) end
     end
     self.pendingProfiles = false
     return true
@@ -399,12 +419,12 @@ function Frames:RefreshAll(refreshAuras)
             paintResources(card, unit)
             paintRates(card, unit)
             if refreshAuras then paintAuras(card, unit) end
-            ns.Visuals:SetPortraitHover(card, MouseIsOver(card.portraitArea))
+            ns.Visuals:SetPortraitHover(card, portraitHovered(card))
         end
     end
     if self.preview and self.preview:IsShown() then
         for _, card in ipairs(self.preview.cards) do
-            ns.Visuals:SetPortraitHover(card, MouseIsOver(card.portraitArea))
+            ns.Visuals:SetPortraitHover(card, portraitHovered(card))
         end
     end
 end
@@ -464,6 +484,7 @@ function Frames:TogglePreview()
     }
     for index, sample in ipairs(samples) do
         local card = CreateFrame("Frame", nil, preview)
+        card.classToken, card.previewIndex = sample[2], index
         card:SetPoint("TOPLEFT", 0, -(index - 1) * L.pitch)
         decorateControls(card, true)
         preview.cards[index] = card
@@ -479,17 +500,7 @@ function Frames:TogglePreview()
         local powerColor = PowerBarColor and PowerBarColor[sample[7]:upper()]
         if powerColor then card.power:SetStatusBarColor(powerColor.r, powerColor.g, powerColor.b) end
         ns.Visuals:PaintRates(card, sample[8], sample[9], sample[8] - sample[9], "available")
-        local exampleSpells = {heals={2050,2052,2061,139}, buffs={1243,14752,976}}
-        for _, kind in ipairs({"heals", "buffs"}) do
-            for slot, button in ipairs(card[kind]) do
-                configureSpell(button, ns.Profiles:GetSpell(sample[2], kind, slot) or exampleSpells[kind][slot])
-                if kind == "buffs" and button.spellID then
-                    button.buffState = slot == 1 and index == 2 and "missing" or "active"
-                    button.glow:SetAlpha(button.buffState == "missing" and 1 or 0)
-                    button.timer:SetText(button.buffState == "missing" and "+" or (slot == 1 and "18m" or "12m"))
-                end
-            end
-        end
+        applyCardProfile(card)
         for slot, button in ipairs(card.debuffs) do
             button:SetShown(slot == 1)
             if slot == 1 then
