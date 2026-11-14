@@ -369,7 +369,7 @@ function Frames:Create()
                 GameTooltip:AddLine("Health bar: incoming heals extend the fill; shields use a light pattern; healing absorption covers health. Edge glows indicate overflow.", 0.75, 0.9, 0.9, true)
             end
             if self.healthHistory and self.healthHistory.supported then
-                GameTooltip:AddLine("Above health: three seconds of HP history. Newest at the bottom; colors show health remaining. Healing hover previews cover the bottom two rows.", 0.75, 0.9, 0.9, true)
+                GameTooltip:AddLine("During combat, above health: three seconds of HP history. Newest at the bottom; colors show health remaining. Healing hover previews cover the bottom two rows.", 0.75, 0.9, 0.9, true)
             end
             showTooltip(self)
         end)
@@ -630,8 +630,15 @@ function Frames:RefreshAll(refreshAuras)
     if self.tooltipButton then updateHover(self.tooltipButton) end
 end
 
+function Frames:ClearHistory()
+    if not ns.HealthHistory then return end
+    -- The explicit solo preview has its own synthetic samples.
+    for _, card in ipairs(self.cards) do ns.HealthHistory:Clear(card) end
+end
+
 function Frames:SampleHistory(now)
     if not ns.HealthHistory then return end
+    if not ns.InCombat() then self:ClearHistory(); return end
     for _, card in ipairs(self.cards) do
         local unit = unitOf(card)
         if unit and card:IsVisible() and ns.worldActive ~= false then

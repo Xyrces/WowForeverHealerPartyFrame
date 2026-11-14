@@ -67,7 +67,7 @@ SlashCmdList.WOWFPARTYFRAMES = function(input)
         if prediction and prediction.reason then ns.Print(prediction.reason) end
         local hover = card and card.hoverPrediction
         ns.Print("Spell hover preview: " .. (hover and hover.supported and "minimum spell values; 2-pixel strip." or "unavailable."))
-        ns.Print("Health history: " .. (ns.HealthHistory and ns.HealthHistory:GetStatus() or "unavailable."))
+        ns.Print("Health history: " .. (ns.HealthHistory and ns.HealthHistory:GetStatus() or "unavailable.") .. " (combat only)")
         local active = card and card.healAuraDisplay
         ns.Print("Assigned healing effects: " .. (active and active.supported and "native active markers and timers." or "unavailable."))
         if active and active.reason then ns.Print(active.reason) end
@@ -104,6 +104,7 @@ events:SetScript("OnEvent", function(_, event, name, second)
     if event == "PLAYER_LOGIN" or event == "PLAYER_REGEN_ENABLED" then
         start()
         if ns.started then
+            if event == "PLAYER_REGEN_ENABLED" then ns.Frames:ClearHistory() end
             if ns.Spells.RefreshCache then ns.Spells:RefreshCache() end
             if ns.SpellEstimates then ns.SpellEstimates:Invalidate() end
             if ns.worldSeen then ns.Assignments:BeginSession(ns.isReloadingUI) end
@@ -114,6 +115,8 @@ events:SetScript("OnEvent", function(_, event, name, second)
         end
     elseif ns.started then
         if event == "PLAYER_REGEN_DISABLED" then
+            ns.Frames:ClearHistory()
+            ns.Frames:SampleHistory(GetTime())
             ns.Frames:StopMoving()
             ns.Frames.mover:Hide()
             if ns.Frames.preview then ns.Frames.preview:Hide() end
