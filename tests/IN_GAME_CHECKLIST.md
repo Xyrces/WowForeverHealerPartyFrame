@@ -41,8 +41,10 @@ Record the client build, addon version, pass/fail results, and exact error text 
 ## Rates and unavailable data
 
 - [ ] On joining or changing zones, rates show a collecting/unavailable state until a complete five-second window is available.
-- [ ] In a context allowing combat data, incoming damage raises damage/sec and effective healing raises healing/sec. Overhealing does not inflate healing/sec.
+- [ ] The rate bar shares the exact left and right edges of the health and resource bars. Healing is the left number, net the center number, and damage the right number. All three remain readable as the fills move.
+- [ ] In a context allowing combat data, incoming damage increases the red portion from the right and effective healing increases the green portion from the left. The split shows their relative proportions. Overhealing does not inflate healing/sec.
 - [ ] The displayed delta equals healing/sec minus damage/sec, allowing for rounding. Activity ages out after five seconds, returning available idle rates to zero.
+- [ ] Equal nonzero rates split the bar evenly. Healing-only is green, damage-only is red, and zero/zero leaves an empty track with zero values. Unavailable data clears old fills and numbers. Large values fit using compact notation, with unabridged rates in the unit tooltip.
 - [ ] If the client restricts combat or aura data, rates show dashes and unknown buffs are not falsely advertised as missing. `/wpf status` explains availability.
 
 ## Combat and roster stability

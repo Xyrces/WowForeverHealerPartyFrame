@@ -188,7 +188,11 @@ function Frames:Create()
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:SetText(self.memberName or "Party member")
             GameTooltip:AddLine("Left-click to target. Right-click for the unit menu.", 0.85, 0.85, 0.85, true)
-            GameTooltip:AddLine("Heal / Damage / Net: health received per second over the last 5 seconds.", 0.85, 0.85, 0.85, true)
+            GameTooltip:AddLine("Rate bar: healing left, net center, damage right. Per second over the last 5 seconds.", 0.85, 0.85, 0.85, true)
+            if self.rateStatus == "available" then
+                GameTooltip:AddLine(string.format("Healing %.1f/s  |  Net %+.1f/s  |  Damage %.1f/s",
+                    self.healingPerSecond, self.netPerSecond, self.damagePerSecond), 1, 1, 1, true)
+            end
             if self.rateStatus and self.rateStatus ~= "available" then
                 GameTooltip:AddLine(self.rateStatus, 1, 0.65, 0.3, true)
             end
@@ -348,20 +352,7 @@ end
 
 local function paintRates(card, unit)
     local heal, damage, net, status = ns.Rates:Get(unit)
-    card.rateStatus = status
-    if status == "available" then
-        card.healRate:SetFormattedText("Heal %.0f/s", heal)
-        card.damageRate:SetFormattedText("Dmg %.0f/s", damage)
-        card.netRate:SetFormattedText("Net %+.0f/s", net)
-        if net > 0 then card.netRate:SetTextColor(0.35, 1, 0.45)
-        elseif net < 0 then card.netRate:SetTextColor(1, 0.36, 0.3)
-        else card.netRate:SetTextColor(0.85, 0.85, 0.8) end
-    else
-        card.healRate:SetText("Heal --/s")
-        card.damageRate:SetText("Dmg --/s")
-        card.netRate:SetText(status == "Collecting rates" and "Collecting" or "Unavailable")
-        card.netRate:SetTextColor(0.65, 0.65, 0.65)
-    end
+    ns.Visuals:PaintRates(card, heal, damage, net, status)
 end
 
 local function paintAuras(card, unit)
@@ -487,10 +478,7 @@ function Frames:TogglePreview()
         card.power.text:SetFormattedText("%d / %d", sample[5], sample[6])
         local powerColor = PowerBarColor and PowerBarColor[sample[7]:upper()]
         if powerColor then card.power:SetStatusBarColor(powerColor.r, powerColor.g, powerColor.b) end
-        card.healRate:SetFormattedText("Heal %d/s", sample[8])
-        card.damageRate:SetFormattedText("Dmg %d/s", sample[9])
-        card.netRate:SetFormattedText("Net %+d/s", sample[8] - sample[9])
-        card.netRate:SetTextColor(sample[8] >= sample[9] and 0.4 or 1, sample[8] >= sample[9] and 1 or 0.4, 0.35)
+        ns.Visuals:PaintRates(card, sample[8], sample[9], sample[8] - sample[9], "available")
         local exampleSpells = {heals={2050,2052,2061,139}, buffs={1243,14752,976}}
         for _, kind in ipairs({"heals", "buffs"}) do
             for slot, button in ipairs(card[kind]) do
