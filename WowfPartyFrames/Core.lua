@@ -114,6 +114,8 @@ events:SetScript("OnEvent", function(_, event, name, second)
         elseif event == "MODIFIER_STATE_CHANGED" then
             -- Secure actions are already configured; only icons/tooltips change.
             ns.Frames:RefreshAll(false)
+        elseif event == "RAID_TARGET_UPDATE" then
+            ns.Frames:RefreshMemberInfo()
         end
         elapsedAuras = 1
     end
@@ -131,6 +133,6 @@ events:SetScript("OnUpdate", function(_, elapsed)
 end)
 
 for _, event in ipairs({"ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "PLAYER_LEAVING_WORLD", "PLAYER_REGEN_ENABLED",
-    "PLAYER_REGEN_DISABLED", "GROUP_ROSTER_UPDATE", "UNIT_NAME_UPDATE", "UNIT_AURA", "SPELLS_CHANGED", "SPELL_TEXT_UPDATE", "MODIFIER_STATE_CHANGED"}) do
+    "PLAYER_REGEN_DISABLED", "GROUP_ROSTER_UPDATE", "UNIT_NAME_UPDATE", "UNIT_AURA", "SPELLS_CHANGED", "SPELL_TEXT_UPDATE", "MODIFIER_STATE_CHANGED", "RAID_TARGET_UPDATE"}) do
     events:RegisterEvent(event)
 end

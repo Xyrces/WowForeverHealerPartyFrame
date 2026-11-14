@@ -549,6 +549,7 @@ function Frames:RefreshAll(refreshAuras)
                 card.memberInfo:SetText(info.summary)
                 card.presetLabel:SetText("Preset: " .. info.preset)
                 card.location:SetText(info.location or "")
+                ns.Visuals:PaintIdentityIcons(card, info.roleToken, info.markerIndex)
                 card.infoUnit, card.infoPreset, card.nextInfoUpdate = unit, card.presetID, now + 1
             end
             paintRates(card, unit)
@@ -562,6 +563,11 @@ function Frames:RefreshAll(refreshAuras)
             ns.Visuals:SetPortraitHover(card, portraitHovered(card))
         end
     end
+end
+
+function Frames:RefreshMemberInfo()
+    for _, card in ipairs(self.cards) do card.nextInfoUpdate = nil end
+    self:RefreshAll(false)
 end
 
 function Frames:SetBlizzardVisible(visible)
@@ -628,7 +634,7 @@ function Frames:TogglePreview()
         card.name:SetText(sample[1]); card.name:SetTextColor(color.r, color.g, color.b)
         local className = sample[2]
         for _, class in ipairs(ns.CLASSES) do if class.token == sample[2] then className = class.name; break end end
-        card.memberInfo:SetText("24 " .. className .. (index == 1 and " · Tank" or index == 3 and " · Healer" or " · Damage"))
+        card.memberInfo:SetText("24 " .. className)
         card.location:SetText(index == 4 and "Westfall" or "")
         card.portrait:SetTexture("Interface\\TargetingFrame\\UI-Classes-Circles")
         local coords = CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[sample[2]]

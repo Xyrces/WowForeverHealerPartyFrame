@@ -10,6 +10,40 @@ local L = ns.Layout
 local MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local FONT = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
 local PORTRAIT_ART = "Interface\\CharacterFrame\\UI-Player-Portrait"
+local ROLE_ATLASES = {TANK="roleicon-tiny-tank", HEALER="roleicon-tiny-healer", DAMAGER="roleicon-tiny-dps"}
+
+function Visuals:PaintIdentityIcons(card, roleToken, markerIndex)
+    local role = not ns.IsSecret(roleToken) and type(roleToken) == "string" and ROLE_ATLASES[roleToken]
+    -- Sprite-cell selection is done by the client, including for secret
+    -- indices. No addon arithmetic or table lookup inspects the marker.
+    local marker = type(markerIndex) == "number"
+    if marker and not ns.IsSecret(markerIndex) then
+        marker = markerIndex >= 1 and markerIndex <= 8 and markerIndex == math.floor(markerIndex)
+    end
+    card.roleIcon:Hide()
+    card.markerIcon:Hide()
+    if role then card.roleIcon:SetAtlas(role); card.roleIcon:Show() end
+    if marker then
+        local ok = pcall(card.markerIcon.SetSpriteSheetCell, card.markerIcon, markerIndex, 4, 4)
+        marker = ok
+        card.markerIcon:SetShown(ok)
+    end
+    local count = (role and 1 or 0) + (marker and 1 or 0)
+    local maximum = L.barWidth - count * 16
+    card.name:SetWidth(maximum)
+    local width = card.name.GetStringWidth and card.name:GetStringWidth()
+    if ns.IsSecret(width) or type(width) ~= "number" or width < 0 or width ~= width then width = maximum end
+    local x = L.barX + math.min(width, maximum) + 2
+    if role then
+        card.roleIcon:ClearAllPoints()
+        card.roleIcon:SetPoint("TOPLEFT", card, "TOPLEFT", x, 0)
+        x = x + 16
+    end
+    if marker then
+        card.markerIcon:ClearAllPoints()
+        card.markerIcon:SetPoint("TOPLEFT", card, "TOPLEFT", x, 0)
+    end
+end
 
 local function text(parent, x, y, width, size, alignment)
     local font = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -231,10 +265,17 @@ function Visuals:DecorateUnit(card)
     card.portrait:SetPoint("CENTER")
     circleMask(area, card.portrait, L.portraitInner)
     card.portraitRim = portraitRim(area, L.portrait, "OVERLAY")
-    card.name = text(card, L.barX, 0, L.barWidth - 40, 12)
-    card.status = text(card, L.barX + L.barWidth - 36, -2, 36, 9, "RIGHT")
+    card.name = text(card, L.barX, 0, L.barWidth, 12)
+    card.roleIcon = card:CreateTexture(nil, "OVERLAY")
+    card.roleIcon:SetSize(14, 14)
+    card.roleIcon:Hide()
+    card.markerIcon = card:CreateTexture(nil, "OVERLAY")
+    card.markerIcon:SetSize(14, 14)
+    card.markerIcon:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcons")
+    card.markerIcon:Hide()
+    card.status = text(card, L.barX + L.barWidth - 36, L.infoY, 36, 9, "RIGHT")
     card.status:SetTextColor(0.82, 0.8, 0.72)
-    card.memberInfo = text(card, L.barX, L.infoY, L.barWidth, 9)
+    card.memberInfo = text(card, L.barX, L.infoY, L.barWidth - 40, 9)
     card.memberInfo:SetTextColor(0.78, 0.78, 0.74)
     card.presetLabel = text(card, L.portraitX, -87, L.portrait, 9, "CENTER")
     card.presetLabel:SetTextColor(0.88, 0.78, 0.53)

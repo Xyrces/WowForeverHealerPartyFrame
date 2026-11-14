@@ -65,16 +65,21 @@ function MemberInfo:Get(unit, presetID)
     result.level = positiveInteger(level) and level or nil
     result.class = text(call(UnitClass, unit))
     local roleToken = text(call(UnitGroupRolesAssigned, unit))
-    local roles = {TANK = text(TANK) or "Tank", HEALER = text(HEALER) or "Healer",
-        DAMAGER = text(DAMAGER) or "Damage"}
-    result.role = roleToken and roles[roleToken] or nil
+    -- This is the native assigned role, never inferred from class or preset.
+    if roleToken == "TANK" or roleToken == "HEALER" or roleToken == "DAMAGER" then
+        result.roleToken = roleToken
+    end
+    local marker = call(GetRaidTargetIndex, unit)
+    -- Native Texture:SetSpriteSheetCell accepts secret numeric cells. Retain
+    -- opaque values for that display path; never index a Lua table with them.
+    if type(marker) == "number" and (ns.IsSecret(marker)
+        or (positiveInteger(marker) and marker <= 8)) then
+        result.markerIndex = marker
+    end
     local identity = {}
     if result.level then identity[#identity + 1] = tostring(result.level) end
     if result.class then identity[#identity + 1] = result.class end
     result.summary = table.concat(identity, " ")
-    if result.role then
-        result.summary = result.summary ~= "" and (result.summary .. " · " .. result.role) or result.role
-    end
     local memberZone, playerZone = zone(unit), zone("player")
     if memberZone and playerZone and memberZone.id ~= playerZone.id then
         result.location = memberZone.name
