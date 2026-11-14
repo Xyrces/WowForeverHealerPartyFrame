@@ -52,6 +52,12 @@ function Hover:Create(card)
         holder:SetPoint("BOTTOMLEFT", health, "TOPLEFT", 0, TOP_GAP)
         holder:SetClipsChildren(true)
         holder:SetAlpha(0)
+        -- Cover just the bottom two history rows while planning a heal. This
+        -- quiet backing keeps the bright preview distinct from green history.
+        local backing = holder:CreateTexture(nil, "BACKGROUND")
+        backing:SetAllPoints(holder)
+        backing:SetColorTexture(0.015, 0.025, 0.02, 0.95)
+        state.backing = backing
         -- Native fill anchors track protected current health. No geometry is
         -- read back, and no target health arithmetic occurs in addon code.
         state.direct = makeBar(state, health:GetStatusBarTexture(), "TOPRIGHT", TOP_GAP, 0.15, 1, 0.42)

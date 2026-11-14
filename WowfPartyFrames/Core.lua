@@ -67,6 +67,7 @@ SlashCmdList.WOWFPARTYFRAMES = function(input)
         if prediction and prediction.reason then ns.Print(prediction.reason) end
         local hover = card and card.hoverPrediction
         ns.Print("Spell hover preview: " .. (hover and hover.supported and "minimum spell values; 2-pixel strip." or "unavailable."))
+        ns.Print("Health history: " .. (ns.HealthHistory and ns.HealthHistory:GetStatus() or "unavailable."))
         local active = card and card.healAuraDisplay
         ns.Print("Assigned healing effects: " .. (active and active.supported and "native active markers and timers." or "unavailable."))
         if active and active.reason then ns.Print(active.reason) end
@@ -147,6 +148,9 @@ end)
 
 events:SetScript("OnUpdate", function(_, elapsed)
     if not ns.started then return end
+    -- Sampling has its own quarter-second clock; the 0.1-second presentation
+    -- throttle must not round it up to 0.3 seconds.
+    ns.Frames:SampleHistory(GetTime())
     elapsedDisplay, elapsedAuras = elapsedDisplay + elapsed, elapsedAuras + elapsed
     if elapsedDisplay < 0.1 then return end
     ns.PresetMenus:Update(elapsedDisplay)

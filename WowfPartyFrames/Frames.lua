@@ -149,6 +149,7 @@ end
 local function decorateControls(card, preview)
     ns.Visuals:DecorateUnit(card)
     if ns.HealthPrediction then ns.HealthPrediction:Create(card) end
+    if ns.HealthHistory then ns.HealthHistory:Create(card) end
     if ns.HoverPrediction then ns.HoverPrediction:Create(card) end
     card.heals, card.buffs = {}, {}
     for _, kind in ipairs({"heals", "buffs"}) do
@@ -212,6 +213,7 @@ local function decorateControls(card, preview)
     card:HookScript("OnHide", function(self)
         if Frames.tooltipButton and Frames.tooltipButton.card == self then hideTooltip() end
         if ns.HoverPrediction then ns.HoverPrediction:Clear(self) end
+        if ns.HealthHistory and not preview then ns.HealthHistory:Clear(self) end
         if ns.HealAuraDisplay then ns.HealAuraDisplay:Clear(self) end
     end)
 end
@@ -366,6 +368,9 @@ function Frames:Create()
             if self.healthPrediction and self.healthPrediction.supported then
                 GameTooltip:AddLine("Health bar: incoming heals extend the fill; shields use a light pattern; healing absorption covers health. Edge glows indicate overflow.", 0.75, 0.9, 0.9, true)
             end
+            if self.healthHistory and self.healthHistory.supported then
+                GameTooltip:AddLine("Above health: three seconds of HP history. Newest at the bottom; colors show health remaining. Healing hover previews cover the bottom two rows.", 0.75, 0.9, 0.9, true)
+            end
             showTooltip(self)
         end)
         card:SetScript("OnLeave", hideTooltip)
@@ -511,7 +516,7 @@ end
 local function paintResources(card, unit)
     -- Secret resource values go directly to permitted display setters. Never
     -- compare, divide, round, or concatenate these values in addon code.
-    local hp, maxHP = UnitHealth(unit), UnitHealthMax(unit)
+    local hp, maxHP = UnitHealth(unit, false), UnitHealthMax(unit)
     card.health:SetMinMaxValues(0, maxHP)
     card.health:SetValue(hp)
     card.health.text:SetFormattedText("%d / %d", hp, maxHP)
@@ -612,6 +617,7 @@ function Frames:RefreshAll(refreshAuras)
             if Frames.tooltipButton and Frames.tooltipButton.card == card then hideTooltip() end
             if ns.HealthPrediction then ns.HealthPrediction:Clear(card) end
             if ns.HoverPrediction then ns.HoverPrediction:Clear(card) end
+            if ns.HealthHistory then ns.HealthHistory:Clear(card) end
             if ns.HealAuraDisplay then ns.HealAuraDisplay:Clear(card) end
         end
     end
@@ -622,6 +628,18 @@ function Frames:RefreshAll(refreshAuras)
         end
     end
     if self.tooltipButton then updateHover(self.tooltipButton) end
+end
+
+function Frames:SampleHistory(now)
+    if not ns.HealthHistory then return end
+    for _, card in ipairs(self.cards) do
+        local unit = unitOf(card)
+        if unit and card:IsVisible() and ns.worldActive ~= false then
+            ns.HealthHistory:Update(card, unit, now)
+        else
+            ns.HealthHistory:Clear(card)
+        end
+    end
 end
 
 function Frames:RefreshPredictions(changedUnit)
@@ -648,6 +666,7 @@ function Frames:ClearPredictions()
     for _, card in ipairs(self.cards) do
         if ns.HealthPrediction then ns.HealthPrediction:Clear(card) end
         if ns.HoverPrediction then ns.HoverPrediction:Clear(card) end
+        if ns.HealthHistory then ns.HealthHistory:Clear(card) end
         if ns.HealAuraDisplay then ns.HealAuraDisplay:Clear(card) end
     end
 end
@@ -728,6 +747,7 @@ function Frames:TogglePreview()
         if coords then card.portrait:SetTexCoord(unpack(coords)) end
         card.health:SetMinMaxValues(0, sample[4]); card.health:SetValue(sample[3])
         card.previewHealthMax = sample[4]
+        if ns.HealthHistory then ns.HealthHistory:Preview(card, sample[3], sample[4], GetTime()) end
         card.health.text:SetFormattedText("%d / %d", sample[3], sample[4])
         if ns.HealthPrediction then
             ns.HealthPrediction:Preview(card, {health=sample[3], healthMax=sample[4],

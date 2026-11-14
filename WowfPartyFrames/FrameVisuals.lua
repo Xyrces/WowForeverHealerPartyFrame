@@ -2,10 +2,10 @@ local _, ns = ...
 local Visuals = {}
 ns.Visuals = Visuals
 -- Shared by live frames and preview; no separate mockup geometry.
-ns.Layout = {width=270, height=116, pitch=126, portrait=82, portraitInner=74,
+ns.Layout = {width=270, height=128, pitch=138, portrait=82, portraitInner=74,
     portraitX=184, healSize=36, healGap=2, healInset=4, auraSize=16, auraPitch=17, auraX=44,
-    debuffY=-64, buffY=-84, barX=5, barWidth=174,
-    infoY=-15, locationY=-104}
+    debuffY=-76, buffY=-96, barX=5, barWidth=174,
+    infoY=-15, locationY=-116, historyHeight=12}
 local L = ns.Layout
 local MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local FONT = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
@@ -93,7 +93,7 @@ end
 
 local function barTrim(card)
     local trim = CreateFrame("Frame", nil, card)
-    trim:SetPoint("TOPLEFT", 0, -27)
+    trim:SetPoint("TOPLEFT", 0, -27 - L.historyHeight)
     trim:SetSize(L.barWidth + 10, 33)
     trim:SetFrameLevel(card.health:GetFrameLevel() + 2)
     trim:EnableMouse(false)
@@ -155,8 +155,8 @@ end
 
 function Visuals:DecorateUnit(card)
     card:SetSize(L.width, L.height)
-    card.health = statusBar(card, -32, 12, 0.10, 0.75, 0.12)
-    card.power = statusBar(card, -46, 10, 0.12, 0.28, 0.88)
+    card.health = statusBar(card, -32 - L.historyHeight, 12, 0.10, 0.75, 0.12)
+    card.power = statusBar(card, -46 - L.historyHeight, 10, 0.12, 0.28, 0.88)
     barTrim(card)
     local area = CreateFrame("Frame", nil, card)
     card.portraitArea = area
