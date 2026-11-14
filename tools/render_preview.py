@@ -30,6 +30,7 @@ def capture():
     lua.globals().RENDER_HOVER = "--hover" in sys.argv
     lua.globals().RENDER_HISTORY = "--history" in sys.argv
     lua.globals().RENDER_CLEANSES = "--cleanses" in sys.argv
+    lua.globals().RENDER_PARITY = "--parity" in sys.argv
     lua.execute(r'''
 state = assert(loadfile("tests/wow_ui_fake.lua"))()()
 state.subgroupCount=0
@@ -124,6 +125,17 @@ if RENDER_HOVER then
     load("SpellEstimates"); load("HoverPrediction")
 end
 load("FrameVisuals")
+if RENDER_PARITY then
+    GetCVarBool=function(name) return name=="showPartyPets" end
+    RegisterUnitWatch=function(frame)
+        frame.unitWatch=true
+        local owner=frame.parent:GetAttribute("unit")
+        local unit=owner and owner:gsub("^party([1-4])$","partypet%1")
+        frame.shown=unit~=nil and state.units[unit]~=nil
+    end
+    UnregisterUnitWatch=function(frame) frame.unitWatch=false end
+    load("MemberInfo"); load("PartyPresence"); load("PartyStatus"); load("PartyPets")
+end
 if RENDER_CLEANSES then
     -- Public sample actions only: Preview never creates native aura controls
     -- or configures secure casting. Spell art is mapped from saved mock assets.
@@ -197,6 +209,61 @@ if RENDER_HISTORY then
             assert(ns.HoverPrediction:Show(card.heals[1],nil,maximum),"History hover fixture failed")
         end
     end
+end
+if RENDER_PARITY then
+    -- Invented public states exercise production layout. There is no client
+    -- connection: native badges are symbolic offline approximations below.
+    local members={
+        {name="Thorin",realm="Stoneheart",class="WARRIOR",guid="sample-one",leader=true,pvp=true,ready="ready",role="TANK",phase=1},
+        {name="Lyra",realm="Silvermoon",class="MAGE",guid="sample-two",ready="waiting",role="DAMAGER",phase=2},
+        {name="Elowen",realm="Moonwhisperlongsurname",class="DRUID",guid="sample-three",connected=false,role="HEALER"},
+        {name="Kael",realm="Nightwind",class="ROGUE",guid="sample-four",ghost=true,ready="notready",role="DAMAGER"},
+    }
+    state.units.player={name="Priest",realm="Dawnlight",class="PRIEST",guid="sample-player"}
+    for index,member in ipairs(members) do state.units["party"..index]=member end
+    state.units.partypet1={name="Companion",health=420,maxHealth=600}
+    local function value(unit,key,default)
+        local unitData=state.units[unit]
+        if unitData and unitData[key]~=nil then return unitData[key] end
+        return default
+    end
+    NameUtil={FormatUnitNameForDisplay=function(unit)
+        local name,surname=UnitName(unit)
+        return surname and name.." "..surname or name
+    end}
+    UnitLevel=function() return 24 end
+    UnitGroupRolesAssigned=function(unit) return value(unit,"role","NONE") end
+    UnitIsConnected=function(unit) return value(unit,"connected",true) end
+    UnitIsGroupLeader=function(unit) return value(unit,"leader",false) end
+    UnitIsPVP=function(unit) return value(unit,"pvp",false) end
+    UnitIsPVPFreeForAll=function() return false end
+    UnitFactionGroup=function() return "Alliance" end
+    UnitIsDead=function(unit) return value(unit,"dead",false) end
+    UnitIsGhost=function(unit) return value(unit,"ghost",false) end
+    UnitIsDeadOrGhost=function(unit) return UnitIsDead(unit) or UnitIsGhost(unit) end
+    UnitPhaseReason=function(unit) return value(unit,"phase") end
+    GetReadyCheckStatus=function(unit) return value(unit,"ready") end
+    GetReadyCheckTimeLeft=function() return 20 end
+    Enum=Enum or {};Enum.PhaseReason={Sharding=1,RuleSet=2}
+    PartyUtil={GetPhasedReasonString=function(reason) return reason==1 and "Member is on another shard." or "Member uses another ruleset." end}
+    ns.PartyStatus.readyActive=true;ns.PartyStatus.readyGeneration=1
+    for index,card in ipairs(p.cards) do
+        local unit="party"..index
+        card.previewIndex=nil
+        card:SetAttribute("unit",unit)
+        ns.MemberInfo:PaintName(card.name,unit)
+        local info=ns.MemberInfo:Get(unit,card.presetID)
+        card.memberInfo:SetText(info.summary)
+        ns.Visuals:PaintIdentityIcons(card,info.roleToken,info.markerIndex)
+        ns.PartyPresence:Create(card);ns.PartyPresence:Update(card,info)
+        ns.PartyStatus:Create(card);ns.PartyStatus:Update(card,unit)
+        ns.PartyPets:Create(card);ns.PartyPets:Update(card)
+        card.name:SetWidth(card.status:GetText()~="" and ns.Layout.barWidth-40 or ns.Layout.barWidth)
+        card.previewIndex=index
+    end
+    ns.Frames:LayoutCards()
+    RENDER_SCENE_H=math.max(680,math.ceil(ns.Frames.anchor:GetHeight()+120))
+    UIParent:SetSize(850,RENDER_SCENE_H)
 end
 for index,obj in ipairs(state.objects) do obj.renderID=index end
 for _,obj in ipairs(state.objects) do
@@ -304,6 +371,29 @@ def main():
     atlas=Image.open(files["ui-classes-circles"]).convert("RGBA") if "ui-classes-circles" in files else None
     classes={"WARRIOR":(0,0),"MAGE":(1,0),"ROGUE":(2,0),"DRUID":(3,0)}
     missing=set()
+    approximations=set()
+    def badge(name,w,h):
+        marks={
+            "UI-HUD-UnitFrame-Player-Group-LeaderIcon":("L",(240,193,55)),
+            "UI-HUD-UnitFrame-Player-Group-GuideIcon":("G",(240,193,55)),
+            "ui-hud-unitframe-player-pvp-allianceicon":("P",(90,165,245)),
+            "ui-hud-unitframe-player-pvp-hordeicon":("P",(220,75,55)),
+            "UI-LFG-ReadyMark":("+",(90,240,100)),
+            "UI-LFG-PendingMark":("?",(240,200,60)),
+            "UI-LFG-DeclineMark":("x",(245,80,65)),
+            "roleicon-tiny-tank":("T",(120,185,235)),
+            "roleicon-tiny-healer":("+",(100,235,120)),
+            "roleicon-tiny-dps":("D",(230,150,70)),
+            "ui-phasingicon":("S",(180,150,240)),
+            "disconnect-icon":("!",(150,150,150)),
+        }
+        if name not in marks:return None
+        approximations.add(name)
+        mark,color=marks[name]
+        image=Image.new("RGBA",(w,h),(0,0,0,0));d=ImageDraw.Draw(image)
+        d.ellipse((1,1,w-2,h-2),fill=(20,20,24,225),outline=color,width=max(1,round(SCALE)))
+        d.text((w/2,h/2),mark,font=ImageFont.truetype("C:/Windows/Fonts/arial.ttf",max(8,round(h*.72))),anchor="mm",fill=color)
+        return image
     for obj in sorted(objects,key=order):
         if not visible(obj) or obj.kind=="MaskTexture" or obj.renderStatusBar is not None:continue
         x,y,w,h=rect(obj)
@@ -320,6 +410,8 @@ def main():
                 for px in range(W):
                     opacity=round(185*max(0,1-abs(px-W*.5)/(W*.5)))
                     td.line((px,0,px,H),fill=tint+(opacity,))
+            elif "--parity" in sys.argv and obj.atlas and badge(str(obj.atlas),W,H) is not None:
+                tile=badge(str(obj.atlas),W,H)
             elif obj.portraitUnit is not None and atlas:
                 anc=parent(obj)
                 while anc is not None and not anc.renderClass:anc=parent(anc)
@@ -348,6 +440,7 @@ def main():
                         quad=tuple(value for i in (0,1,3,2) for value in points[i])
                         tile=tile.transform((W,H),Image.Transform.QUAD,quad,Image.Resampling.BICUBIC)
                     tile=tile.resize((W,H),Image.Resampling.LANCZOS)
+                elif "--parity" in sys.argv and badge(name,W,H) is not None:tile=badge(name,W,H)
                 elif "statusbar" in name or "white" in name:tile=Image.new("RGBA",(W,H),(255,255,255,255))
                 elif name=="shield-overlay":
                     tile=Image.new("RGBA",(W,H),(0,0,0,0));td=ImageDraw.Draw(tile)
@@ -445,6 +538,8 @@ def main():
         if "--hover" in sys.argv: caption += " + 2px hover overlay"
     if "--cleanses" in sys.argv:
         caption="OFFLINE RADIAL CLEANSES · actual Lua geometry and TGA art · sample alerts; not game casting"
+    if "--parity" in sys.argv:
+        caption="OFFLINE PARTY PARITY · actual addon layout · invented member states; native badges approximated"
     draw.text((round(22*SCALE),round(18*SCALE)),caption,font=ImageFont.truetype("C:/Windows/Fonts/arial.ttf",round(12*SCALE)),fill=(210,210,205))
     draw.text((round(22*SCALE),canvas.height-round(25*SCALE)),"Actual addon geometry; fonts, patterns, glows and cooldowns approximated. Not an in-game screenshot.",font=ImageFont.truetype("C:/Windows/Fonts/arial.ttf",round(10*SCALE)),fill=(165,165,160))
     suffix = "-radial" if "--cleanses" in sys.argv else ""
@@ -455,10 +550,12 @@ def main():
     if "--predictions" in sys.argv: suffix += "-predictions"
     if "--hover" in sys.argv: suffix += "-hover"
     if "--history" in sys.argv: suffix += "-history"
+    if "--parity" in sys.argv: suffix += "-parity"
     filename = "layout-preview" + suffix + ".png"
     destination=ROOT/".work"/filename;canvas.convert("RGB").save(destination)
     print(destination)
     print("Unmapped textures:",", ".join(sorted(missing)) or "none")
+    if approximations: print("Symbolic native badge approximations:",", ".join(sorted(approximations)))
 
 
 if __name__=="__main__":main()

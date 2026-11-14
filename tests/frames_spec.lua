@@ -132,9 +132,40 @@ ns.Frames:RefreshRoster()
 equal(tank.classToken, "WARRIOR")
 equal(mage.classToken, "MAGE")
 
+-- Native owner refresh follows the secure binding while the pointer stays still.
+local nativeTooltipAvailable = true
+GameTooltip.IsOwned = function(self, owner) return self.SetOwnerArgs and self.SetOwnerArgs[1] == owner end
+GameTooltip.SetUnit = function(self, unit)
+    self.nativeUnit = unit
+    if not nativeTooltipAvailable then return false end
+    self:SetText(UnitName(unit))
+    return true
+end
+tank:GetScript("OnEnter")(tank)
+equal(GameTooltip.nativeUnit, "party1")
+equal(type(tank.UpdateTooltip), "function")
 state.combat = true
 state.units.party1, state.units.party2 = state.units.party2, state.units.party1
+tank:UpdateTooltip()
+equal(GameTooltip.nativeUnit, "party1", "refresh uses current binding until native header reconciles")
 for _, header in ipairs(ns.Frames.headers) do state.reconcileHeader(header) end
+tank:UpdateTooltip()
+equal(GameTooltip.nativeUnit, "party2", "stationary tooltip follows named member after combat reorder")
+equal(GameTooltip:GetText(), "Tank")
+nativeTooltipAvailable = false
+GameTooltip:SetText("Stale member")
+tank:UpdateTooltip()
+equal(GameTooltip:GetText(), "Tank", "false native tooltip result uses member name fallback")
+nativeTooltipAvailable = true
+tank:GetScript("OnLeave")(tank)
+equal(tank.UpdateTooltip, nil)
+equal(GameTooltip:IsShown(), false)
+tank:GetScript("OnEnter")(tank)
+GameTooltip:SetOwner(mage, "ANCHOR_NONE")
+GameTooltip:Show()
+tank:GetScript("OnHide")(tank)
+equal(tank.UpdateTooltip, nil, "hidden member stops native tooltip updates")
+equal(GameTooltip:IsShown(), true, "hiding another member preserves current tooltip")
 equal(ns.Frames:RefreshRoster(), false)
 equal(tank.header:GetAttribute("nameList"), "Tank", "name binding remains immutable in combat")
 equal(tank.classToken, "WARRIOR")

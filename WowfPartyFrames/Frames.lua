@@ -35,6 +35,7 @@ local function colorFor(class)
 end
 
 local function hideTooltip()
+    if ns.AuraDetails then ns.AuraDetails:Hide() end
     local button = Frames.tooltipButton
     if button and ns.HoverPrediction then ns.HoverPrediction:Clear(button.card) end
     Frames.tooltipButton = nil
@@ -66,6 +67,42 @@ local function showTooltip(button)
     else
         GameTooltip:SetPoint("TOPRIGHT", card, "TOPLEFT", -12, 0)
     end
+end
+
+-- The native tooltip timer calls its owner's UpdateTooltip. Resolve the secure
+-- unit on every refresh so a party reorder cannot leave another member's details.
+local function updateMemberTooltip(self)
+    openTooltip(self)
+    local unit=unitOf(self)
+    local native = false
+    if unit and type(GameTooltip.SetUnit) == "function" then
+        local ok, hasTooltip = pcall(GameTooltip.SetUnit, GameTooltip, unit)
+        native = ok and public(hasTooltip, "boolean") and hasTooltip
+    end
+    local details = ns.MemberInfo and ns.MemberInfo:Get(unit, self.presetID)
+    if not native then GameTooltip:SetText(details and details.displayName or self.memberName or "Party member") end
+    if details and details.summary ~= "" then GameTooltip:AddLine(details.summary, 0.85, 0.85, 0.8) end
+    if details and details.location then GameTooltip:AddLine("Location: " .. details.location, 0.7, 0.8, 1) end
+    if details and details.presenceTooltip then GameTooltip:AddLine(details.presenceTooltip,1,.8,.4,true) end
+    if ns.PartyStatus then
+        for _,line in ipairs(ns.PartyStatus:GetTooltipLines(self)) do GameTooltip:AddLine(line,.85,.85,.8,true) end
+    end
+    local preset = ns.Profiles:GetPreset(self.presetID)
+    GameTooltip:AddLine("Preset: " .. (preset and preset.name or "Default"), 1, 0.82, 0)
+    GameTooltip:AddLine("Left-click to target. Right-click to assign a preset or open party actions.", 0.85, 0.85, 0.85, true)
+    if self.healthPrediction and self.healthPrediction.supported then
+        GameTooltip:AddLine("Health bar: incoming heals extend the fill; shields use a light pattern; healing absorption covers health. Edge glows indicate overflow.", 0.75, 0.9, 0.9, true)
+    end
+    if self.healthHistory and self.healthHistory.supported then
+        GameTooltip:AddLine(string.format("During combat, above health: %g seconds of HP history. Newest at the bottom; colors show health remaining. Healing hover previews cover the bottom two rows.", ns.HealthHistory and ns.HealthHistory:GetWindowSeconds() or 3), 0.75, 0.9, 0.9, true)
+    end
+    showTooltip(self)
+    if ns.AuraDetails then ns.AuraDetails:Show(self,unit) end
+end
+
+local function leaveMemberTooltip(self)
+    self.UpdateTooltip = nil
+    if type(GameTooltip.IsOwned) == "function" and GameTooltip:IsOwned(self) then GameTooltip:Hide() end
 end
 
 local function activeLayer(card)
@@ -213,12 +250,21 @@ local function decorateControls(card, preview)
     if not preview and ns.AuraDisplay then ns.AuraDisplay:Create(card) end
     if not preview and ns.HealAuraDisplay then ns.HealAuraDisplay:Create(card) end
     if not preview and ns.CleanseDisplay then ns.CleanseDisplay:Create(card) end
+    if not preview and ns.PartyPresence then ns.PartyPresence:Create(card) end
+    if not preview and ns.PartyStatus then ns.PartyStatus:Create(card) end
+    if not preview and ns.PartyPets then ns.PartyPets:Create(card) end
+    if not preview and ns.AuraDetails then ns.AuraDetails:Create(card) end
     card:HookScript("OnHide", function(self)
+        leaveMemberTooltip(self)
         if Frames.tooltipButton and Frames.tooltipButton.card == self then hideTooltip() end
         if ns.HoverPrediction then ns.HoverPrediction:Clear(self) end
         if ns.HealthHistory and not preview then ns.HealthHistory:Clear(self) end
         if ns.HealAuraDisplay then ns.HealAuraDisplay:Clear(self) end
         if ns.CleanseDisplay then ns.CleanseDisplay:Clear(self) end
+        if ns.PartyPresence then ns.PartyPresence:Clear(self) end
+        if ns.PartyStatus then ns.PartyStatus:Clear(self) end
+        if ns.PartyPets then ns.PartyPets:Clear(self) end
+        if ns.AuraDetails then ns.AuraDetails:Clear(self) end
     end)
 end
 
@@ -284,6 +330,7 @@ local function applyCardProfile(card)
     if not card.previewIndex and ns.AuraDisplay then ns.AuraDisplay:ConfigureBuffs(card) end
     if not card.previewIndex and ns.HealAuraDisplay then ns.HealAuraDisplay:Configure(card) end
     if ns.CleanseDisplay then ns.CleanseDisplay:Configure(card) end
+    if not card.previewIndex and ns.PartyPets then ns.PartyPets:Configure(card) end
     ns.Visuals:ApplyControlStyle(card)
     paintHealing(card)
 end
@@ -298,8 +345,14 @@ function Frames:LayoutCards(count)
     local outer = geometry and geometry.outer or count > 0 and (round and 64 or 76) or 0
     local pitch = outer > 0 and outer * 2 + 24 or L.pitch
     local topPadding = outer > 0 and outer - L.portrait / 2 + 4 or 0
+    if ns.PartyPresence or ns.PartyStatus then topPadding=math.max(topPadding,20) end
     local width = outer > 0 and math.max(L.width, L.portraitX + L.portrait / 2 + outer + 4) or L.width
-    local height = pitch * 3 + math.max(L.height, outer > 0 and 42 + outer + 17 or L.height)
+    local bottom=math.max(L.height,outer>0 and 42+outer+17 or L.height)
+    if ns.PartyPets and ns.PartyPets:WantsSpace() then
+        pitch=math.max(pitch,ns.PartyPets.pitch)
+        bottom=math.max(bottom,ns.PartyPets.bottom)
+    end
+    local height = pitch * 3 + bottom
     local presetY = outer > 0 and -(42 + outer + 6) or -87
     -- Finish a drag using the old handle offset before changing its geometry.
     if self.moving then self:StopMoving() end
@@ -412,23 +465,11 @@ function Frames:Create()
         card:SetAttribute("*type2", "togglemenu")
         decorateControls(card, false)
         card:SetScript("OnEnter", function(self)
-            openTooltip(self)
-            GameTooltip:SetText(self.memberName or "Party member")
-            local details = ns.MemberInfo and ns.MemberInfo:Get(unitOf(self), self.presetID)
-            if details and details.summary ~= "" then GameTooltip:AddLine(details.summary, 0.85, 0.85, 0.8) end
-            if details and details.location then GameTooltip:AddLine("Location: " .. details.location, 0.7, 0.8, 1) end
-            local preset = ns.Profiles:GetPreset(self.presetID)
-            GameTooltip:AddLine("Preset: " .. (preset and preset.name or "Default"), 1, 0.82, 0)
-            GameTooltip:AddLine("Left-click to target. Right-click to assign a preset or open party actions.", 0.85, 0.85, 0.85, true)
-            if self.healthPrediction and self.healthPrediction.supported then
-                GameTooltip:AddLine("Health bar: incoming heals extend the fill; shields use a light pattern; healing absorption covers health. Edge glows indicate overflow.", 0.75, 0.9, 0.9, true)
-            end
-            if self.healthHistory and self.healthHistory.supported then
-                GameTooltip:AddLine(string.format("During combat, above health: %g seconds of HP history. Newest at the bottom; colors show health remaining. Healing hover previews cover the bottom two rows.", ns.HealthHistory and ns.HealthHistory:GetWindowSeconds() or 3), 0.75, 0.9, 0.9, true)
-            end
-            showTooltip(self)
+            self.UpdateTooltip = updateMemberTooltip
+            updateMemberTooltip(self)
         end)
-        card:SetScript("OnLeave", hideTooltip)
+        -- The aura panel has its own leave grace so its icons remain reachable.
+        card:SetScript("OnLeave", leaveMemberTooltip)
         self.headers[index], self.cards[index] = header, card
         RegisterStateDriver(header, "visibility", "[group:raid] hide; show")
     end
@@ -586,13 +627,20 @@ local function paintResources(card, unit)
     local color = PowerBarColor and (PowerBarColor[powerToken] or PowerBarColor[power]) or {r=0.12,g=0.35,b=0.88}
     if color then card.power:SetStatusBarColor(color.r, color.g, color.b) end
     local connected, dead = UnitIsConnected(unit), UnitIsDeadOrGhost(unit)
-    card.status:SetText(public(connected) and connected == false and "Offline"
-        or public(dead) and dead and "Dead" or "")
+    local statusText=public(connected) and connected == false and "Offline"
+        or public(dead) and dead and "Dead" or ""
+    card.status:SetText(statusText)
+    card.name:SetWidth(statusText~="" and L.barWidth-40 or L.barWidth)
     local target = UnitIsUnit(unit, "target")
     card.targetRing:SetAlpha(public(target) and target and 1 or 0)
     card.targetRing:Show()
-    card.name:SetText(UnitName(unit))
-    SetPortraitTexture(card.portrait, unit)
+    if ns.MemberInfo and ns.MemberInfo.PaintName then ns.MemberInfo:PaintName(card.name,unit)
+    else card.name:SetText(UnitName(unit)) end
+    -- Honor the native portrait-replacement preference without initializing a
+    -- second unit frame or registering native events on our protected card.
+    local portraitUpdated=type(UnitFramePortrait_Update)=="function"
+        and pcall(UnitFramePortrait_Update,{unit=unit,portrait=card.portrait})
+    if not portraitUpdated then SetPortraitTexture(card.portrait, unit) end
 end
 
 local function paintAuras(card, unit)
@@ -655,6 +703,8 @@ function Frames:RefreshAll(refreshAuras)
             paintResources(card, unit)
             if ns.HealAuraDisplay then ns.HealAuraDisplay:Update(card, unit) end
             if ns.CleanseDisplay then ns.CleanseDisplay:Update(card, unit) end
+            if ns.PartyPets then ns.PartyPets:Update(card,unit) end
+            if ns.AuraDetails then ns.AuraDetails:Update(card,unit) end
             if ns.HealthPrediction then
                 ns.HealthPrediction:Update(card, ns.worldActive ~= false and unit or nil)
             end
@@ -665,11 +715,13 @@ function Frames:RefreshAll(refreshAuras)
                 card.memberInfo:SetText(info.summary)
                 card.presetLabel:SetText("Preset: " .. info.preset)
                 card.location:SetText(info.location or "")
+                if ns.PartyPresence then ns.PartyPresence:Update(card,info) end
                 ns.Visuals:PaintIdentityIcons(card, info.roleToken, info.markerIndex)
                 card.infoUnit, card.infoPreset, card.nextInfoUpdate = unit, card.presetID, now + 1
             end
             if refreshAuras then paintAuras(card, unit) end
             ns.Visuals:SetPortraitHover(card, portraitHovered(card))
+            if ns.PartyStatus then ns.PartyStatus:Update(card,unit) end
         else
             if Frames.tooltipButton and Frames.tooltipButton.card == card then hideTooltip() end
             if ns.HealthPrediction then ns.HealthPrediction:Clear(card) end
@@ -677,6 +729,10 @@ function Frames:RefreshAll(refreshAuras)
             if ns.HealthHistory then ns.HealthHistory:Clear(card) end
             if ns.HealAuraDisplay then ns.HealAuraDisplay:Clear(card) end
             if ns.CleanseDisplay then ns.CleanseDisplay:Clear(card) end
+            if ns.PartyPresence then ns.PartyPresence:Clear(card) end
+            if ns.PartyStatus then ns.PartyStatus:Clear(card) end
+            if ns.PartyPets then ns.PartyPets:Clear(card) end
+            if ns.AuraDetails then ns.AuraDetails:Clear(card) end
         end
     end
     if self.preview and self.preview:IsShown() then
@@ -737,6 +793,10 @@ function Frames:ClearPredictions()
         if ns.HealthHistory then ns.HealthHistory:Clear(card) end
         if ns.HealAuraDisplay then ns.HealAuraDisplay:Clear(card) end
         if ns.CleanseDisplay then ns.CleanseDisplay:Clear(card) end
+        if ns.PartyPresence then ns.PartyPresence:Clear(card) end
+        if ns.PartyStatus then ns.PartyStatus:Clear(card) end
+        if ns.PartyPets then ns.PartyPets:Clear(card) end
+        if ns.AuraDetails then ns.AuraDetails:Clear(card) end
     end
 end
 

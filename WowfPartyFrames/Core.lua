@@ -4,6 +4,12 @@ ns.events = events
 local elapsedDisplay, elapsedAuras = 0, 0
 local predictionEvents = {UNIT_HEALTH=true, UNIT_MAXHEALTH=true, UNIT_HEAL_PREDICTION=true,
     UNIT_ABSORB_AMOUNT_CHANGED=true, UNIT_HEAL_ABSORB_AMOUNT_CHANGED=true}
+local memberEvents={GROUP_LEFT=true,PARTY_LEADER_CHANGED=true,UPDATE_ACTIVE_BATTLEFIELD=true,UNIT_FACTION=true,
+    READY_CHECK=true,READY_CHECK_CONFIRM=true,READY_CHECK_FINISHED=true,UNIT_CONNECTION=true,
+    UNIT_PHASE=true,UNIT_FLAGS=true,UNIT_CTR_OPTIONS=true,UNIT_OTHER_PARTY_CHANGED=true,
+    INCOMING_SUMMON_CHANGED=true,PARTY_MEMBER_ENABLE=true,PARTY_MEMBER_DISABLE=true,
+    UNIT_THREAT_SITUATION_UPDATE=true,UNIT_PET=true,UNIT_LEVEL=true,
+    SHARD_TRANSFER_IMMINENT=true,SHARD_TRANSFER_CANCELLED=true,SHARD_TRANSFER=true}
 
 local function start()
     if ns.started or ns.InCombat() then return end
@@ -78,6 +84,7 @@ SlashCmdList.WOWFPARTYFRAMES = function(input)
         ns.Print("Assigned healing effects: " .. (active and active.supported and "native active markers and timers." or "unavailable."))
         if active and active.reason then ns.Print(active.reason) end
         if ns.CleanseDisplay then ns.Print("Debuff removal: " .. ns.CleanseDisplay:GetStatus(card)) end
+        if ns.PartyPets then ns.Print("Party pets: "..ns.PartyPets:GetStatus(card)) end
         if ns.Frames.pendingRoster then ns.Print("New party members will appear after combat ends.") end
     else
         ns.Print("/wpf, /wpf test, /wpf unlock, /wpf lock, /wpf reset, /wpf blizzard, /wpf status")
@@ -85,6 +92,8 @@ SlashCmdList.WOWFPARTYFRAMES = function(input)
 end
 
 events:SetScript("OnEvent", function(_, event, name, second)
+    if ns.PartyPresence then ns.PartyPresence:OnEvent(event) end
+    if ns.PartyStatus then ns.PartyStatus:OnEvent(event,name,second) end
     if event == "PLAYER_ENTERING_WORLD" then
         ns.worldActive = true
         if not ns.worldSeen then ns.isReloadingUI = second == true end
@@ -154,6 +163,13 @@ events:SetScript("OnEvent", function(_, event, name, second)
             ns.Frames:RefreshAll(false)
         elseif event == "RAID_TARGET_UPDATE" then
             ns.Frames:RefreshMemberInfo()
+        elseif event == "CVAR_UPDATE" then
+            if not ns.IsSecret(name) and type(name)=="string" and name:lower()=="showpartypets" then
+                ns.Frames:ApplyProfiles()
+            end
+            ns.Frames:RefreshMemberInfo()
+        elseif memberEvents[event] then
+            ns.Frames:RefreshMemberInfo()
         elseif predictionEvents[event] then
             ns.Frames:RefreshPredictions(name)
         end
@@ -180,3 +196,5 @@ for _, event in ipairs({"ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD",
     events:RegisterEvent(event)
 end
 for event in pairs(predictionEvents) do events:RegisterEvent(event) end
+for event in pairs(memberEvents) do pcall(events.RegisterEvent,events,event) end
+events:RegisterEvent("CVAR_UPDATE")

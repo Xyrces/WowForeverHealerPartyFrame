@@ -117,6 +117,19 @@ Record the client build, addon version, pass/fail results, and exact error text 
 - [ ] Members with unresolved names are not bound to spells until their unique names become available. No frame labeled Unknown casts on a different member. Temporarily unresolved roster entries do not erase existing preset choices.
 - [ ] Leave and rejoin the party, enter and exit a raid, change zones, and `/reload`. No stale party names, duplicate frames, or Lua errors remain.
 
+## Native party information (0.10.0)
+
+- [ ] Names include the correct surname with native spacing. Long names do not overlap Offline/Dead/Ghost or the portrait. Hover shows the full native name, guild/status details, and the assigned preset. Keep hovering through a combat roster reorder: native details, casts, and displayed identity stay together.
+- [ ] Leader/guide and PvP/FFA badges update after promotion, demotion, and flag changes. Offline, dead, and ghost members have distinct text/portrait treatment. The native class-portrait preference works without changing healing controls.
+- [ ] Ready checks show waiting/ready/not-ready, retain completed results, then fade. Reorder both during and after the check: retained results follow the person; a newcomer never inherits a prior result. Leave/rejoin and reload during a check without stale badges.
+- [ ] Low-health warning appears at roughly 20% and clears after healing. Native threat warnings work on members and pets, clear on disappearance/offline, and respect the game's threat-warning setting. Neither decoration blocks healing clicks.
+- [ ] Different shard, ruleset/phase, another group, and incoming summon states show the appropriate reason. A shard icon alone does not promise a transfer. If the server offers one, clicking outside combat opens the native confirmation; cancellation/completion clears it. Combat refuses confirmation. No arbitrary destination is selected by the addon.
+- [ ] Native show-party-pets setting creates/removes the pet row outside combat, with space reserved appropriately in both portrait styles. Target/menu clicks act on the correct pet after owner roster reorder, including combat. Dismiss/resummon and disconnected owners leave no stale health or auras. In combat, a pet retained by the secure watcher says Owner offline until it can be hidden safely.
+- [ ] Pet health, native debuff timers/tooltips, threat, dispel borders, and dispellable-only filtering match the native frames. A stationary pet tooltip updates after owner reorder. Toggling pet visibility in combat applies after combat.
+- [ ] Hover the member body, then move into the aura panel: up to 16 buffs and 8 debuffs remain reachable with native effect tooltips, including in combat. Test a physical/untyped debuff as well as magic/poison/disease/curse. Timers, type-colored borders, and the portrait's highest-priority harmful edge update without intercepting casts.
+- [ ] Voice activity appears only while the correct member speaks and cleans up on disconnect, roster changes, leaving the party, or loading. Verify no protected-action errors from native voice notifications.
+- [ ] Settings still read Portrait controls → Buttons / Quadrants. Existing bar art, exact-rank assignments, modifier groups, and compact/spaced cleanse arcs are unchanged.
+
 ## Result
 
 - Client build:

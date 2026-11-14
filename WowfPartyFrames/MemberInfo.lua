@@ -22,6 +22,91 @@ local function record(value)
     return not (issecrettable and issecrettable(value))
 end
 
+local function displayName(unit)
+    if not text(unit) then return end
+    -- Forever's Camelot NameUtil override treats UnitName's second return as
+    -- a surname. The generic API documentation still calls it unitServer.
+    -- This is display text only: secure headers retain their own hyphen keys.
+    local formatter = GetUnitName or (NameUtil and NameUtil.FormatUnitNameForDisplay)
+    local value = call(formatter, unit, true)
+    if ns.IsSecret(value) or text(value) then return value end
+    if type(UnitName) ~= "function" then return end
+    local ok, first, surname = pcall(UnitName, unit)
+    if not ok then return end
+    if ns.IsSecret(first) then return first end
+    first = text(first)
+    if not first then return end
+    surname = text(surname)
+    if not surname then return first end
+    local constants = Constants and Constants.CharacterNameSeparatorConsts
+    local separator = constants and text(constants.CHARACTERNAME_SURNAME_SEPARATOR) or " "
+    local suffix = separator .. surname
+    -- Some compatible wrappers already return the complete display name.
+    if first:sub(-#suffix) == suffix then return first end
+    return first .. suffix
+end
+
+function MemberInfo:GetDisplayName(unit)
+    return text(displayName(unit))
+end
+
+function MemberInfo:PaintName(font, unit)
+    -- Native strings may be opaque. Forward them to the renderer without
+    -- concatenation, comparison, or caching under another member's identity.
+    local name = displayName(unit)
+    font:SetText(name)
+end
+
+local function presence(result, unit)
+    local otherParty = call(UnitInOtherParty, unit)
+    if public(otherParty,"boolean") and otherParty then
+        result.presenceKind, result.presenceText = "otherParty", "Other group"
+        result.presenceTooltip = text(PARTY_IN_PUBLIC_GROUP_MESSAGE) or "This player is in another group."
+        result.presenceAtlas, result.presenceDim = "groupfinder-eye-single", true
+        return
+    end
+    local summon = C_IncomingSummon
+    local incoming = summon and call(summon.HasIncomingSummon, unit)
+    if public(incoming, "boolean") and incoming then
+        local status = call(summon.IncomingSummonStatus, unit)
+        local statuses = Enum and Enum.SummonStatus
+        if not public(status, "number") or not statuses then return end
+        if status == statuses.Pending then
+            result.presenceKind, result.presenceText = "summonPending", "Summon pending"
+            result.presenceAtlas = "Raid-Icon-SummonPending"
+            result.presenceTooltip = text(INCOMING_SUMMON_TOOLTIP_SUMMON_PENDING) or "A summon is pending."
+        elseif status == statuses.Accepted then
+            result.presenceKind, result.presenceText = "summonAccepted", "Summon accepted"
+            result.presenceAtlas = "Raid-Icon-SummonAccepted"
+            result.presenceTooltip = text(INCOMING_SUMMON_TOOLTIP_SUMMON_ACCEPTED) or "The summon was accepted."
+        elseif status == statuses.Declined then
+            result.presenceKind, result.presenceText = "summonDeclined", "Summon declined"
+            result.presenceAtlas = "Raid-Icon-SummonDeclined"
+            result.presenceTooltip = text(INCOMING_SUMMON_TOOLTIP_SUMMON_DECLINED) or "The summon was declined."
+        end
+        return
+    end
+    local connected = call(UnitIsConnected, unit)
+    if not public(connected,"boolean") or not connected then return end
+    local reason = call(UnitPhaseReason, unit)
+    if not public(reason,"number") then return end
+    result.phaseReason = reason
+    local reasons = Enum and Enum.PhaseReason or {}
+    local kind, label = "phase", "Different phase"
+    if reason == reasons.Sharding then kind, label = "shard", "Different shard"
+    elseif reason == reasons.RuleSet then kind, label = "ruleset", "Different ruleset"
+    elseif reason == reasons.WarMode then kind, label = "warMode", "Different War Mode"
+    elseif reason == reasons.ChromieTime then kind, label = "chromieTime", "Different timeline"
+    elseif reason == reasons.TimerunningHwt then kind, label = "worldTier", "Different world tier" end
+    result.differentShard = kind == "shard"
+    result.presenceKind, result.presenceText, result.presenceDim = kind, label, true
+    result.presenceTexture = "Interface\\TargetingFrame\\UI-PhasingIcon"
+    result.presenceTexCoord = {0.15625,0.84375,0.15625,0.84375}
+    -- The native helper distinguishes which side is outside the party shard;
+    -- UnitInPartyShard(false) alone does not prove these two members differ.
+    result.presenceTooltip = text(call(PartyUtil and PartyUtil.GetPhasedReasonString,reason,unit)) or label
+end
+
 local function zone(unit)
     local zoneType = Enum and Enum.UIMapType and Enum.UIMapType.Zone
     local dungeonType = Enum and Enum.UIMapType and Enum.UIMapType.Dungeon
@@ -60,6 +145,8 @@ function MemberInfo:Get(unit, presetID)
     if not text(unit) then return result end
     local exists = call(UnitExists, unit)
     if public(exists, "boolean") and not exists then return result end
+    result.displayName = self:GetDisplayName(unit)
+    presence(result, unit)
 
     local level = call(UnitLevel, unit)
     result.level = positiveInteger(level) and level or nil

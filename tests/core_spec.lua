@@ -63,6 +63,15 @@ AddonCompartmentFrame = {RegisterAddon = function(_, entry)
 end}
 load("Minimap")
 load("Core")
+local presenceEvents, statusEvents = {}, {}
+ns.PartyPresence = {OnEvent=function(_, event) presenceEvents[event]=(presenceEvents[event] or 0)+1 end}
+ns.PartyStatus = {OnEvent=function(_, event) statusEvents[event]=(statusEvents[event] or 0)+1 end}
+for _, event in ipairs({"GROUP_LEFT", "READY_CHECK", "READY_CHECK_FINISHED", "SHARD_TRANSFER_IMMINENT", "SHARD_TRANSFER_CANCELLED", "SHARD_TRANSFER"}) do
+    state.emit(event)
+    equal(statusEvents[event], 1, "native status lifecycle is registered even before frame startup")
+    equal(presenceEvents[event], 1, "pending-transfer lifecycle reaches presence state")
+end
+ns.PartyPresence, ns.PartyStatus = nil, nil
 state.combat = true
 state.emit("ADDON_LOADED", "OtherAddon")
 equal(initialized, 0)

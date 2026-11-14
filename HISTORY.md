@@ -1,5 +1,13 @@
 # Release history
 
+## 0.10.0 — native party information
+
+Added Forever surname formatting, native member tooltips, phase/shard and summon indicators, leader/guide and PvP badges, ready checks, disconnect/dead/ghost treatment, low-health/threat warnings, native voice activity, and optional party pets. A hover panel exposes native aura overflow and dispel-colored borders. Portraits honor the native class-portrait preference. The existing Portrait controls labels remain Buttons and Quadrants.
+
+Shard confirmation is offered only for an existing server-requested transfer, outside combat; cancellation invalidates the offer even if the countdown briefly remains positive. No arbitrary member-to-member shard jump is added. Secure pet targeting, hover tooltips, and retained ready-check results follow member identity through party reorders. Offline pet owners hide outside combat; in combat a still-visible native-watched pet clears stale data and reports Owner offline.
+
+Validation: 27 Lua syntax checks and 30 isolated suites, source audit and Astra review, plus offline renders of both portrait-control styles. Engine-level casting, native aura interaction, voice activity, and combat visuals still require client verification. Conditional shared-client capabilities and the pet offline limitation are documented in the README. This release has its own development commit.
+
 ## 0.9.0 — radial cleanse controls
 
 Cleanse actions now use custom curved artwork on the portrait's right side. Quadrants keeps a compact ring; Buttons leaves room around the full square healing controls. Both styles retain their existing settings choice, exact spell ranks, modifier targeting and native member menus. Idle arcs remain visibly grey; native aura displays add color, timers and glow when applicable. One action occupies the upper quadrant, two use right quadrants, and three/four divide the right half into smaller arcs.
