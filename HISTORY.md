@@ -1,4 +1,14 @@
-# Recovered release history
+# Release history
+
+## 0.9.0 — radial cleanse controls
+
+Cleanse actions now use custom curved artwork on the portrait's right side. Quadrants keeps a compact ring; Buttons leaves room around the full square healing controls. Both styles retain their existing settings choice, exact spell ranks, modifier targeting and native member menus. Idle arcs remain visibly grey; native aura displays add color, timers and glow when applicable. One action occupies the upper quadrant, two use right quadrants, and three/four divide the right half into smaller arcs.
+
+Fixed secure input strips stay inside the visible curves and cast on mouse press, avoiding release cancellation when the pointer crosses a strip boundary. Healing controls take precedence in overlaps. Style changes, assignment changes and cleanup run outside combat. Stack spacing, preset labels, drag handles and screen bounds adapt to the selected style; health/resource bar artwork and dimensions are unchanged.
+
+Validation: 23 Lua syntax checks, 26 isolated test suites, reproducible artwork/package checks and offline renders of both styles. Astra reviewed the secure/native boundaries after AGY exhausted its quota. Live client casting and rendering still need confirmation. This change has its own development commit; it is not a reconstructed snapshot.
+
+## Recovered releases through 0.8.1
 
 Twenty saved release packages were imported on November 14, 2026. Each snapshot has its own commit, preserving its Lua and TOC files byte for byte. Each package was checked against its saved SHA-256 sidecar before import.
 

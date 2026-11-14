@@ -86,6 +86,7 @@ return function()
     function methods:SetSpriteSheetCell(cell, rows, columns) self.spriteCell = {cell, rows, columns} end
     function methods:SetTexture(value) self.texture = value end
     function methods:SetBlendMode(value) self.blendMode = value end
+    function methods:SetDrawSwipe(value) self.SetDrawSwipeArgs = {value} end
     function methods:SetAlpha(value) self.alpha = value end
     function methods:GetAlpha() return self.alpha end
     function methods:SetValue(value) self.value = value end
@@ -93,6 +94,9 @@ return function()
     function methods:SetFrameLevel(value) self.level = value end
     function methods:GetFrameLevel() return self.level end
     function methods:SetScale(value) check(self, "SetScale"); self.scale = value end
+    function methods:SetClampRectInsets(...)
+        check(self, "SetClampRectInsets"); self.SetClampRectInsetsArgs = { ... }
+    end
     function methods:GetScale() return self.scale or 1 end
     function methods:GetEffectiveScale() return self:GetScale() * (self.parent and self.parent:GetEffectiveScale() or 1) end
     function methods:GetLeft() return self.left or 24 end

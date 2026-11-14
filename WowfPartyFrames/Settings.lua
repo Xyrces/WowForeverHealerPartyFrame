@@ -417,7 +417,7 @@ function Settings:Create()
         control:SetPoint("TOPLEFT", 132 + (index - 1) * 96, -331)
         control:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetText(id == "buttons" and "Four full square spell buttons on hover." or "Four sections inside the circular portrait.")
+            GameTooltip:SetText(id == "buttons" and "Four full square spell buttons on hover. Cleanse arcs sit farther out to keep the corners clear." or "Four sections inside the circular portrait, with compact cleanse arcs around its right edge.")
             if ns.InCombat() then GameTooltip:AddLine("Change after combat ends.", 1, 0.3, 0.3) end
             GameTooltip:Show()
         end)

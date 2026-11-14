@@ -2,7 +2,7 @@
 ## Title: WoW Forever Party Frames
 ## Notes: Vanilla portraits, numerical resources, healing and buff presets.
 ## Author: jtn50
-## Version: 0.8.1
+## Version: 0.9.0
 ## OptionalDeps: Blizzard_AuraContainer
 ## SavedVariables: WowfPartyFramesDB
 
@@ -21,6 +21,7 @@ HealthHistory.lua
 HoverPrediction.lua
 AuraDisplay.lua
 HealAuraDisplay.lua
+CleanseGeometry.lua
 CleanseDisplay.lua
 Frames.lua
 CleanseSettings.lua

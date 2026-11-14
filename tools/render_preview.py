@@ -12,7 +12,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / ".work/python-packages"))
 from lupa.lua51 import LuaRuntime
-from PIL import Image, ImageChops, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps
 
 ART = ROOT / ".work/art-reference"
 SCALE = 1.8
@@ -20,6 +20,7 @@ SCENE_W, SCENE_H = 850, 680
 
 
 def capture():
+    global SCENE_H
     lua = LuaRuntime(unpack_returned_tuples=True)
     lua.globals().RENDER_QUADRANTS = "--quadrants" in sys.argv
     lua.globals().RENDER_SHIFT = "--shift" in sys.argv
@@ -28,6 +29,7 @@ def capture():
     lua.globals().RENDER_PREDICTIONS = "--predictions" in sys.argv
     lua.globals().RENDER_HOVER = "--hover" in sys.argv
     lua.globals().RENDER_HISTORY = "--history" in sys.argv
+    lua.globals().RENDER_CLEANSES = "--cleanses" in sys.argv
     lua.execute(r'''
 state = assert(loadfile("tests/wow_ui_fake.lua"))()()
 state.subgroupCount=0
@@ -122,6 +124,15 @@ if RENDER_HOVER then
     load("SpellEstimates"); load("HoverPrediction")
 end
 load("FrameVisuals")
+if RENDER_CLEANSES then
+    -- Public sample actions only: Preview never creates native aura controls
+    -- or configures secure casting. Spell art is mapped from saved mock assets.
+    ns.Cleanses={GetActions=function() return {
+        {key="Magic",spellID=527,types={Magic=true},record={icon="PreviewDispel"}},
+        {key="Disease",spellID=528,types={Disease=true},record={icon="PreviewDisease"}},
+    } end}
+    load("CleanseGeometry"); load("CleanseDisplay")
+end
 if RENDER_HISTORY then load("HealthHistory") end
 if RENDER_PREDICTIONS then load("HealthPrediction") end
 load("Frames"); load("Settings"); load("PresetMenus")
@@ -140,6 +151,11 @@ if RENDER_PROMPT then
     prompt:Show()
 end
 ns.Visuals:SetPortraitHover(p.cards[1],true)
+if RENDER_CLEANSES then
+    for _,card in ipairs(p.cards) do ns.Visuals:SetPortraitHover(card,RENDER_HOVER) end
+    RENDER_SCENE_H=math.max(680,math.ceil(ns.Frames.anchor:GetHeight()+120))
+    UIParent:SetSize(850,RENDER_SCENE_H)
+end
 for index,card in ipairs(p.cards) do card.renderClass=({"WARRIOR","MAGE","DRUID","ROGUE"})[index] end
 if RENDER_HOVER then
     local cases={
@@ -189,6 +205,8 @@ for _,obj in ipairs(state.objects) do
 end
 ''')
     objects = list(lua.globals().state.objects.values())
+    if lua.globals().RENDER_SCENE_H is not None:
+        SCENE_H = int(lua.globals().RENDER_SCENE_H)
     return objects
 
 
@@ -279,6 +297,10 @@ def main():
     for y in range(canvas.height):
         t=y/canvas.height;draw.line((0,y,canvas.width,y),fill=(round(35-15*t),round(36-16*t),round(38-16*t),255))
     files={p.stem.lower():p for p in ART.glob("*") if p.suffix.lower()==".png"}
+    if "--cleanses" in sys.argv:
+        for name, filename in (("previewdispel", "dispel.jpg"), ("previewdisease", "disease.jpg")):
+            saved = ROOT / ".work/cleanse-mockup" / filename
+            if saved.is_file(): files[name] = saved
     atlas=Image.open(files["ui-classes-circles"]).convert("RGBA") if "ui-classes-circles" in files else None
     classes={"WARRIOR":(0,0),"MAGE":(1,0),"ROGUE":(2,0),"DRUID":(3,0)}
     missing=set()
@@ -304,8 +326,14 @@ def main():
                 cx,cy=classes.get(anc.renderClass if anc is not None else "WARRIOR",(0,0))
                 cell=atlas.width//4;tile=atlas.crop((cx*cell,cy*cell,(cx+1)*cell,(cy+1)*cell)).resize((W,H),Image.Resampling.LANCZOS)
             elif obj.texture:
-                name=str(obj.texture).replace("\\","/").split("/")[-1].split(".")[0].lower()
+                texture_path=str(obj.texture).replace("\\","/")
+                name=texture_path.split("/")[-1].split(".")[0].lower()
                 path=files.get(name)
+                prefix="Interface/AddOns/WowfPartyFrames/Media/"
+                if texture_path.startswith(prefix):
+                    candidate=(ROOT/"WowfPartyFrames"/"Media"/texture_path[len(prefix):]).resolve()
+                    media=(ROOT/"WowfPartyFrames"/"Media").resolve()
+                    if candidate.is_relative_to(media) and candidate.is_file(): path=candidate
                 if path:
                     tile=Image.open(path).convert("RGBA")
                     coords=seq(obj.SetTexCoordArgs)
@@ -327,6 +355,10 @@ def main():
                 elif "emptyslot" in name:tile=Image.new("RGBA",(W,H),(24,22,19,255))
                 else:missing.add(name)
             if tile is not None:
+                if obj.SetDesaturatedArgs and obj.SetDesaturatedArgs[1]:
+                    saved_alpha=tile.getchannel("A")
+                    tile=ImageOps.grayscale(tile).convert("RGBA")
+                    tile.putalpha(saved_alpha)
                 if obj.SetVertexColorArgs is not None:tile=ImageChops.multiply(tile,Image.new("RGBA",tile.size,rgba(obj.SetVertexColorArgs)))
                 masks=seq(obj.AddMaskTextureArgs)
                 if masks:
@@ -411,9 +443,12 @@ def main():
     if "--history" in sys.argv:
         caption="OFFLINE HEALTH HISTORY · 95%, 70%, 45%, 15% fixtures · 12px history"
         if "--hover" in sys.argv: caption += " + 2px hover overlay"
+    if "--cleanses" in sys.argv:
+        caption="OFFLINE RADIAL CLEANSES · actual Lua geometry and TGA art · sample alerts; not game casting"
     draw.text((round(22*SCALE),round(18*SCALE)),caption,font=ImageFont.truetype("C:/Windows/Fonts/arial.ttf",round(12*SCALE)),fill=(210,210,205))
     draw.text((round(22*SCALE),canvas.height-round(25*SCALE)),"Actual addon geometry; fonts, patterns, glows and cooldowns approximated. Not an in-game screenshot.",font=ImageFont.truetype("C:/Windows/Fonts/arial.ttf",round(10*SCALE)),fill=(165,165,160))
-    suffix = "-quadrants" if "--quadrants" in sys.argv else ""
+    suffix = "-radial" if "--cleanses" in sys.argv else ""
+    if "--quadrants" in sys.argv: suffix += "-quadrants"
     if "--shift" in sys.argv: suffix += "-shift"
     if "--menu-open" in sys.argv: suffix += "-menu"
     if "--prompt" in sys.argv: suffix += "-prompt"

@@ -172,7 +172,9 @@ local function decorateControls(card, preview)
                 local x = (index - 1) % 2 * (L.healSize + L.healGap) + L.healInset
                 local y = -L.healInset - math.floor((index - 1) / 2) * (L.healSize + L.healGap)
                 button:SetPoint("TOPLEFT", card.portraitArea, "TOPLEFT", x, y)
-                button:SetFrameLevel(card.portraitArea:GetFrameLevel() + 2)
+                -- Healing controls own every overlap with the radial cleanse
+                -- decoration and its fixed secure hit regions.
+                button:SetFrameLevel(card.portraitArea:GetFrameLevel() + 10)
                 button.border:SetAlpha(0)
             else
                 button:SetPoint("TOPLEFT", L.auraX + (index - 1) * L.auraPitch, L.buffY)
@@ -286,15 +288,58 @@ local function applyCardProfile(card)
     paintHealing(card)
 end
 
+function Frames:LayoutCards(count)
+    if ns.InCombat() then self.pendingProfiles = true; return false end
+    if not self.anchor then return false end
+    if count == nil then count = ns.Cleanses and #ns.Cleanses:GetActions() or 0 end
+    local round = ns.db and ns.db.controlStyle == "quadrants"
+    local geometry = count > 0 and ns.CleanseGeometry
+        and ns.CleanseGeometry:Get(round and "quadrants" or "buttons", 1, count)
+    local outer = geometry and geometry.outer or count > 0 and (round and 64 or 76) or 0
+    local pitch = outer > 0 and outer * 2 + 24 or L.pitch
+    local topPadding = outer > 0 and outer - L.portrait / 2 + 4 or 0
+    local width = outer > 0 and math.max(L.width, L.portraitX + L.portrait / 2 + outer + 4) or L.width
+    local height = pitch * 3 + math.max(L.height, outer > 0 and 42 + outer + 17 or L.height)
+    local presetY = outer > 0 and -(42 + outer + 6) or -87
+    -- Finish a drag using the old handle offset before changing its geometry.
+    if self.moving then self:StopMoving() end
+    self.pitch, self.topPadding = pitch, topPadding
+    -- Only the non-clickable stack anchor grows. Individual target buttons,
+    -- bars, portraits and healing controls retain their existing dimensions.
+    self.anchor:SetSize(width, height)
+    if self.anchor.SetClampRectInsets then
+        -- Positive top offsets keep artwork above the anchor on-screen.
+        self.anchor:SetClampRectInsets(0, 0, topPadding, 0)
+    end
+    for index, header in ipairs(self.headers) do
+        header:ClearAllPoints()
+        header:SetPoint("TOPLEFT", self.anchor, "TOPLEFT", 0, -(index - 1) * pitch)
+    end
+    local function labelPositions(cards)
+        for _, card in ipairs(cards) do
+            card.presetLabel:ClearAllPoints()
+            card.presetLabel:SetPoint("TOPLEFT", card, "TOPLEFT", L.portraitX, presetY)
+        end
+    end
+    labelPositions(self.cards)
+    if self.preview then
+        for index, card in ipairs(self.preview.cards) do
+            card:ClearAllPoints()
+            card:SetPoint("TOPLEFT", self.preview, "TOPLEFT", 0, -(index - 1) * pitch)
+        end
+        labelPositions(self.preview.cards)
+        if self.preview.title then
+            self.preview.title:ClearAllPoints()
+            self.preview.title:SetPoint("TOPLEFT", self.preview, "BOTTOMLEFT", L.barX, -7)
+        end
+    end
+    if self.unlocked and self.mover then self:SetUnlocked(true) end
+    return true
+end
+
 function Frames:ApplyProfiles()
     if ns.InCombat() then self.pendingProfiles = true; return false end
-    if self.anchor and ns.Cleanses then
-        local count = #ns.Cleanses:GetActions()
-        -- Reserve screen-clamping space, without widening the member's target
-        -- button underneath the separate cleanse controls.
-        local width = count > 0 and L.portraitX + L.portrait + 8 + math.floor((count-1)/2)*96 + 91 or L.width
-        self.anchor:SetWidth(math.max(L.width, width))
-    end
+    self:LayoutCards()
     for _, card in ipairs(self.cards) do applyCardProfile(card) end
     if self.preview then
         for _, card in ipairs(self.preview.cards) do applyCardProfile(card) end
@@ -421,7 +466,7 @@ function Frames:StopMoving()
         local factor = self.mover:GetEffectiveScale() / self.anchor:GetEffectiveScale()
         local left, top = self.mover:GetLeft() * factor, self.mover:GetTop() * factor
         self.anchor:ClearAllPoints()
-        self.anchor:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top - 30 * factor)
+        self.anchor:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top - 30 * factor - (self.topPadding or 0))
         self:SavePosition()
     end
 end
@@ -439,9 +484,10 @@ function Frames:SetUnlocked(unlocked)
     self.unlocked = unlocked
     if unlocked then
         local factor = self.anchor:GetEffectiveScale() / self.mover:GetEffectiveScale()
+        self.mover:SetWidth(self.anchor:GetWidth() * factor)
         self.mover:ClearAllPoints()
         self.mover:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT",
-            self.anchor:GetLeft() * factor, self.anchor:GetTop() * factor + 30)
+            self.anchor:GetLeft() * factor, (self.anchor:GetTop() + (self.topPadding or 0)) * factor + 30)
     end
     self.mover:SetShown(unlocked)
     return true
@@ -738,11 +784,16 @@ function Frames:TogglePreview()
     if GetNumSubgroupMembers() > 0 or IsInRaid() then
         return false, "Your party frames are already live. Preview is available while solo."
     end
-    if self.preview then self.preview:SetShown(not self.preview:IsShown()); return true end
+    if self.preview then
+        self.preview:SetShown(not self.preview:IsShown())
+        self:LayoutCards()
+        return true
+    end
     local preview = CreateFrame("Frame", "WowfPartyFramesPreview", self.anchor)
     self.preview = preview
     preview:SetAllPoints(self.anchor)
     local title = preview:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    preview.title = title
     title:SetPoint("TOPLEFT", preview, "BOTTOMLEFT", L.barX, -7)
     title:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 9, "OUTLINE")
     title:SetText("Preview  |  /wpf test to close")
@@ -792,6 +843,7 @@ function Frames:TogglePreview()
         end
         ns.Visuals:SetPortraitHover(card, false)
     end
+    self:LayoutCards()
     if UISpecialFrames then table.insert(UISpecialFrames, "WowfPartyFramesPreview") end
     return true
 end

@@ -115,19 +115,23 @@ state.subgroupCount=0
 SlashCmdList.WOWFPARTYFRAMES("test")
 equal(ns.Frames.preview:IsShown(),true)
 local preview=ns.Frames.preview.cards
-equal(preview[1].cleansePreview[1]:IsShown(),true,"idle sample keeps visible cleanse controls")
-equal(preview[1].cleansePreview[1].icon.SetDesaturatedArgs[1],true,"idle sample is grey")
-equal(preview[2].cleansePreview[1]:IsShown(),true,"active sample appears")
-equal(preview[2].cleansePreview[1].spellID,527)
-equal(preview[2].cleansePreview[1]:GetAttribute("type1"),nil,"preview cannot cast")
+equal(preview[1].cleansePreview.slots[1].art:IsShown(),true,"idle sample keeps visible cleanse controls")
+equal(preview[1].cleansePreview.slots[1].icon.SetDesaturatedArgs[1],true,"idle sample is grey")
+equal(preview[2].cleansePreview.slots[1].art:IsShown(),true,"active sample appears")
+equal(preview[2].cleansePreview.slots[1].spellID,527)
+for _,button in ipairs(preview[2].cleansePreview.slots[1].buttons) do
+    equal(button:GetAttribute("type1"),nil,"preview cannot cast")
+end
 cursor={"spell",2,"spell",988}
 ns.CleanseSettings.slots.Magic:GetScript("OnClick")(ns.CleanseSettings.slots.Magic,"LeftButton")
 equal(cleared,2)
 equal(edits,2)
 equal(applies,2)
 equal(refreshes,2)
-equal(preview[2].cleansePreview[1].spellID,988,"real callback refreshes existing preview")
-equal(preview[2].cleansePreview[1]:GetAttribute("spell"),nil)
+equal(preview[2].cleansePreview.slots[1].spellID,988,"real callback refreshes existing preview")
+for _,button in ipairs(preview[2].cleansePreview.slots[1].buttons) do
+    equal(button:GetAttribute("spell"),nil)
+end
 
 -- The two real numeric settings are linked and persist one canonical value.
 local settings=ns.Settings.frame

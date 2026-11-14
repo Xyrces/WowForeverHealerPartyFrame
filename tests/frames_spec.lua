@@ -34,6 +34,7 @@ ns.Auras = {
     Paint = function(buttons, button) button.timer:SetText("") end,
 }
 load("FrameVisuals")
+load("CleanseGeometry")
 local bindingCalls=0
 local function globalBinding() bindingCalls=bindingCalls+1;error("party controls must not set global bindings") end
 SetBinding, SetBindingClick, SetOverrideBindingClick, SetOverrideBinding = globalBinding, globalBinding, globalBinding, globalBinding
@@ -85,6 +86,7 @@ for index,button in ipairs(tank.heals) do
     equal(button:GetWidth(),36)
     equal(button:GetHeight(),36)
     equal(button.point[2],tank.portraitArea)
+    equal(button:GetFrameLevel(),tank.portraitArea:GetFrameLevel()+10,"heals stay above radial art and secure cleanse regions")
     equal(offsetX(button),(index-1)%2*38+4,"two square columns have two-pixel separation")
     equal(offsetY(button),-4-math.floor((index-1)/2)*38)
 end
@@ -249,6 +251,79 @@ for index, card in ipairs(preview.cards) do
     equal(card:GetWidth(), ns.Frames.cards[index]:GetWidth())
     equal(card:GetHeight(), ns.Frames.cards[index]:GetHeight())
 end
+-- Radial controls change stack bounds and spacing, never the existing bars or
+-- large member-target buttons. Exercise both styles with an existing preview.
+local oldCleanses, oldStyle = ns.Cleanses, ns.db.controlStyle
+local actionCount = 2
+ns.Cleanses = {GetActions=function()
+    local actions = {}; for index=1,actionCount do actions[index]={spellID=index} end
+    return actions
+end}
+local anchor = ns.Frames.anchor
+-- The shared fake may omit this API; this local recorder checks calls without
+-- claiming to emulate native screen clamping.
+if not anchor.SetClampRectInsets then
+    anchor.SetClampRectInsets=function(self,...)
+        assert(not state.combat,"clamp rectangle cannot change during combat")
+        self.SetClampRectInsetsArgs={...}
+    end
+end
+local originalPoint = {anchor:GetPoint()}
+for _, layout in ipairs({{"quadrants",64,152,27,293,584,-112},{"buttons",76,176,39,305,663,-124}}) do
+    ns.db.controlStyle = layout[1]
+    equal(ns.Frames:ApplyProfiles(),true)
+    equal(ns.Frames.pitch,layout[3])
+    equal(ns.Frames.topPadding,layout[4])
+    equal(anchor:GetWidth(),layout[5],"radial extent is included in screen clamp width")
+    equal(anchor:GetHeight(),layout[6],"last preset label is included in stack height")
+    equal(anchor.SetClampRectInsetsArgs[3],layout[4],"positive top clamp reserves arc above anchor")
+    equal(anchor.point[4],originalPoint[4],"style changes retain custom anchor x")
+    equal(anchor.point[5],originalPoint[5],"style changes retain custom anchor y")
+    equal(preview.title.point[2],preview)
+    equal(preview.title.point[3],"BOTTOMLEFT","preview caption follows resized stack")
+    for index, card in ipairs(ns.Frames.cards) do
+        equal(offsetY(ns.Frames.headers[index]),-(index-1)*layout[3])
+        equal(offsetY(preview.cards[index]),offsetY(ns.Frames.headers[index]),"preview uses live radial row pitch")
+        equal(offsetY(card.presetLabel),layout[7])
+        equal(offsetY(preview.cards[index].presetLabel),layout[7])
+        equal(card:GetWidth(),ns.Layout.width,"target hit box must not grow under the radial ring")
+        equal(card:GetHeight(),ns.Layout.height)
+        equal(card.health:GetWidth(),ns.Layout.barWidth,"radials never restyle or resize health bars")
+        equal(card.portraitArea:GetWidth(),ns.Layout.portrait)
+        -- Label's lower edge leaves eight units before the next arc begins.
+        equal(layout[3]+42-layout[2] >= -layout[7]+9+8,true,"labels and next member arc stay separate")
+    end
+    local factor = anchor:GetEffectiveScale()/ns.Frames.mover:GetEffectiveScale()
+    equal(ns.Frames.mover:GetWidth(),layout[5]*factor)
+    equal(ns.Frames.mover.point[5],(anchor:GetTop()+layout[4])*factor+30,"move handle clears ring at current scale")
+end
+state.combat = true
+ns.db.controlStyle = "quadrants"
+equal(ns.Frames:ApplyProfiles(),false)
+equal(ns.Frames:LayoutCards(2),false,"direct layout request is also guarded during combat")
+equal(ns.Frames.pitch,176,"combat leaves old layout untouched")
+equal(offsetY(ns.Frames.headers[2]),-176)
+equal(anchor.SetClampRectInsetsArgs[3],39)
+equal(#state.violations,0,"radial geometry never mutates secure frames during combat")
+state.combat = false
+equal(ns.Frames:ApplyProfiles(),true)
+equal(ns.Frames.pitch,152,"deferred style is applied outside combat")
+ns.Frames.mover.left, ns.Frames.mover.top = 200, 400
+ns.Frames.mover:GetScript("OnDragStart")()
+ns.Frames.mover:GetScript("OnDragStop")()
+equal(anchor.point[4],400)
+equal(anchor.point[5],713,"drag conversion subtracts radial padding in anchor units")
+equal(ns.db.position.y,713,"radial drag preserves the actual anchor coordinate")
+actionCount = 0
+ns.Frames:ApplyProfiles()
+equal(ns.Frames.pitch,ns.Layout.pitch,"no assigned cleanse restores normal spacing")
+equal(anchor:GetWidth(),ns.Layout.width)
+equal(anchor:GetHeight(),ns.Layout.pitch*3+ns.Layout.height)
+equal(anchor.SetClampRectInsetsArgs[3],0)
+equal(offsetY(ns.Frames.cards[1].presetLabel),-87)
+equal(offsetY(preview.cards[1].presetLabel),-87)
+ns.Cleanses, ns.db.controlStyle = oldCleanses, oldStyle
+ns.Frames:ApplyProfiles()
 for _, card in ipairs(ns.Frames.preview.cards) do
     for _, kind in ipairs({ "heals", "buffs" }) do
         for _, button in ipairs(card[kind]) do equal(button:GetAttribute("type1"), nil, "preview never casts") end

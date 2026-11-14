@@ -4,7 +4,16 @@ Status: **not yet run**. Target: WoW Forever **1.60.1.70862**, interface **16001
 
 Record the client build, addon version, pass/fail results, and exact error text when testing. Run the initial checks in a quiet area with a cooperative party. The preview cannot validate casting.
 
-## Version 0.8.1: visible cleanse actions and native alerts
+## Version 0.9.0: radial cleanses in both portrait styles
+
+- [ ] In settings, **Quadrants** places compact quarter-ring controls close to the portrait; **Buttons** leaves visible space around the four square healing tiles. Both choices persist after reload, update an open solo preview, and refuse changes during combat. Health/mana bars retain their original size, trim and colors.
+- [ ] The visible interior of each arc casts the correct exact-rank cleanse, including near its upper/lower ends, both idle and with an active alert. The hollow center, gaps and transparent outer corners never cast a cleanse. Where a compact arc overlaps the existing heal hit areas, the heal wins. Check the actual UI scale and both styles.
+- [ ] Sweep the pointer across each arc: its assigned spell tooltip remains readable, native debuff tooltips still identify the effects, and no native overlay blocks clicking a lit arc. Check left and modified left clicks, right-click menus, combat, and party reordering.
+- [ ] Cleanse clicks fire once on mouse press, including when the pointer moves slightly before release. Releasing never casts a second time. Repeat with the game's action-on-key-down setting both ways; other controls retain their existing click behavior.
+- [ ] One assigned removal action uses one upper arc; two use right quadrants; three/four divide the right half into smaller arcs. Removing/changing assignments leaves no stale clickable sections. A multi-type spell occupies just one arc.
+- [ ] Preset labels clear the arcs and the next member. Drag to all screen edges: the top/right portions remain visible. Switching styles preserves the saved stack position and updates row spacing; with no removal abilities, normal spacing returns.
+
+## Visible cleanse actions and native alerts (retained from 0.8.1)
 
 - [ ] `/wpf` opens and its **Debuff removal...** button opens four type slots. A priest with the spells learned sees automatic Dispel Magic and Cure Disease; no recipient class/preset is used to choose them. Drop a lower Dispel rank or Abolish Disease, reload, and confirm the manual choice persists. Right-click disables that type; Auto restores it. Another character has separate choices.
 - [ ] With no removable debuff, every assigned cleanse button remains visibly grey and clickable, in and out of combat. There are no invisible casting areas. Removing an assignment outside combat hides and disarms that button.

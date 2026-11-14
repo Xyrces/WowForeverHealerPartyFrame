@@ -22,5 +22,7 @@ jobs:
         run: python -m pip install -r requirements-test.txt
       - name: Check Lua syntax and behavior
         run: python tests/run_tests.py
+      - name: Verify generated radial artwork
+        run: python tools/generate_cleanse_art.py --check
       - name: Build and verify addon package
         run: python tools/package.py

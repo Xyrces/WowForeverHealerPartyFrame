@@ -4,6 +4,7 @@ from hashlib import sha256
 from io import BytesIO
 from pathlib import Path, PurePosixPath
 import re
+import struct
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 
@@ -45,7 +46,28 @@ def build():
         if not source.is_relative_to(ADDON.resolve()) or not source.is_file():
             raise ValueError(f"TOC file missing or outside addon folder: {name}")
         payload[name] = source.read_bytes()
-    # Only the entrypoint, its explicit source list, and user documentation ship.
+    # Original radial art is an explicit manifest; no work files or unrelated
+    # screenshots enter the addon archive. These names match CleanseGeometry.
+    assets = {
+        f"Media/cleanse-{style}-{count}-{index}-{layer}.tga"
+        for style in ("buttons", "quadrants")
+        for count in (2, 3, 4)
+        for index in range(1, count + 1)
+        for layer in ("fill", "rim", "glow")
+    }
+    actual_assets = {p.relative_to(ADDON).as_posix() for p in (ADDON / "Media").glob("*.tga")}
+    if actual_assets != assets:
+        raise ValueError("Radial artwork does not match its package manifest")
+    for name in sorted(assets):
+        source = ADDON.joinpath(*PurePosixPath(name).parts).resolve()
+        if not source.is_relative_to(ADDON.resolve()):
+            raise ValueError(f"Asset outside addon folder: {name}")
+        data = source.read_bytes()
+        if len(data) != 18 + 256 * 256 * 4 or data[2] != 2 or data[16] != 32 \
+                or struct.unpack_from("<HH", data, 12) != (256, 256):
+            raise ValueError(f"Unexpected TGA dimensions/encoding: {name}")
+        payload[name] = data
+    # Only source, original artwork, and user documentation ship.
     payload["README.md"] = (ROOT / "README.md").read_text(encoding="utf-8-sig").replace(
         "(tests/IN_GAME_CHECKLIST.md)", "(CHECKLIST.md)"
     ).encode("utf-8")
@@ -72,6 +94,9 @@ def build():
         for name in toc_files(archived_toc):
             if archive.read(f"{ADDON_NAME}/{name}") != payload[name]:
                 raise ValueError(f"Packaged TOC source mismatch: {name}")
+        for name, data in payload.items():
+            if archive.read(f"{ADDON_NAME}/{name}") != data:
+                raise ValueError(f"Packaged file mismatch: {name}")
 
     destination = ROOT / "dist" / f"{ADDON_NAME}-{version_match.group(1)}.zip"
     destination.parent.mkdir(parents=True, exist_ok=True)
