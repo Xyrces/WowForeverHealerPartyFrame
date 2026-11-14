@@ -204,10 +204,11 @@ function Settings:RefreshMenu()
         local option = frame.presetOptions[index]
         if not option then
             option = CreateFrame("Button", nil, frame.menu)
-            frame.presetOptions[index] = option
             option:SetSize(196, 23)
             option:SetPoint("TOPLEFT", 7, -6 - (index - 1) * 23)
             option:SetNormalFontObject("GameFontHighlight")
+            -- A plain Button gets its font string on the first SetText call.
+            option:SetText(entry.name)
             local text = option:GetFontString()
             text:ClearAllPoints()
             text:SetPoint("LEFT", 20, 0)
@@ -224,6 +225,7 @@ function Settings:RefreshMenu()
                 elseif button.entry.id then Settings:SelectPreset(button.entry.id)
                 else Settings:PromptPresetAction(button.entry.action) end
             end)
+            frame.presetOptions[index] = option
         end
         option.entry = entry
         option:SetText(entry.name)
