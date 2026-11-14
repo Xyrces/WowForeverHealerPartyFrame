@@ -313,14 +313,6 @@ function Frames:Create()
             if self.healthPrediction and self.healthPrediction.supported then
                 GameTooltip:AddLine("Health bar: incoming heals extend the fill; shields use a light pattern; healing absorption covers health. Edge glows indicate overflow.", 0.75, 0.9, 0.9, true)
             end
-            GameTooltip:AddLine("Rate bar: healing left, net center, damage right. Per second over the last 5 seconds.", 0.85, 0.85, 0.85, true)
-            if self.rateStatus == "available" then
-                GameTooltip:AddLine(string.format("Healing %.1f/s  |  Net %+.1f/s  |  Damage %.1f/s",
-                    self.healingPerSecond, self.netPerSecond, self.damagePerSecond), 1, 1, 1, true)
-            end
-            if self.rateStatus and self.rateStatus ~= "available" then
-                GameTooltip:AddLine(self.rateStatus, 1, 0.65, 0.3, true)
-            end
             showTooltip(self)
         end)
         card:SetScript("OnLeave", hideTooltip)
@@ -489,11 +481,6 @@ local function paintResources(card, unit)
     SetPortraitTexture(card.portrait, unit)
 end
 
-local function paintRates(card, unit)
-    local heal, damage, net, status = ns.Rates:Get(unit)
-    ns.Visuals:PaintRates(card, heal, damage, net, status)
-end
-
 local function paintAuras(card, unit)
     for _, view in ipairs({{card.debuffs, card.debuffLabel, "Debuffs", "GetDebuffs"}}) do
         local entries, known = {}, card.nativeAuras
@@ -565,7 +552,6 @@ function Frames:RefreshAll(refreshAuras)
                 ns.Visuals:PaintIdentityIcons(card, info.roleToken, info.markerIndex)
                 card.infoUnit, card.infoPreset, card.nextInfoUpdate = unit, card.presetID, now + 1
             end
-            paintRates(card, unit)
             if refreshAuras then paintAuras(card, unit) end
             ns.Visuals:SetPortraitHover(card, portraitHovered(card))
         elseif ns.HealthPrediction then
@@ -657,10 +643,10 @@ function Frames:TogglePreview()
     title:SetText("Preview  |  /wpf test to close")
     preview.cards = {}
     local samples = {
-        {"Thorin", "WARRIOR", 3240, 4500, 62, 100, "Rage", 50, 45, 650, 400, 450, 0},
-        {"Lyra", "MAGE", 2100, 2100, 2800, 3600, "Mana", 25, 38, 0, 0, 600, 0},
-        {"Elowen", "DRUID", 2410, 2800, 1920, 3100, "Mana", 32, 20, 100, 100, 0, 700},
-        {"Kael", "ROGUE", 2180, 2600, 80, 100, "Energy", 15, 15, 150, 0, 180, 0},
+        {"Thorin", "WARRIOR", 3240, 4500, 62, 100, "Rage", 650, 400, 450, 0},
+        {"Lyra", "MAGE", 2100, 2100, 2800, 3600, "Mana", 0, 0, 600, 0},
+        {"Elowen", "DRUID", 2410, 2800, 1920, 3100, "Mana", 100, 100, 0, 700},
+        {"Kael", "ROGUE", 2180, 2600, 80, 100, "Energy", 150, 0, 180, 0},
     }
     for index, sample in ipairs(samples) do
         local card = CreateFrame("Frame", nil, preview)
@@ -681,14 +667,13 @@ function Frames:TogglePreview()
         card.health.text:SetFormattedText("%d / %d", sample[3], sample[4])
         if ns.HealthPrediction then
             ns.HealthPrediction:Preview(card, {health=sample[3], healthMax=sample[4],
-                totalIncomingHeals=sample[10], totalIncomingHealsFromHealer=sample[11],
-                totalDamageAbsorbs=sample[12], totalHealAbsorbs=sample[13]})
+                totalIncomingHeals=sample[8], totalIncomingHealsFromHealer=sample[9],
+                totalDamageAbsorbs=sample[10], totalHealAbsorbs=sample[11]})
         end
         card.power:SetMinMaxValues(0, sample[6]); card.power:SetValue(sample[5])
         card.power.text:SetFormattedText("%d / %d", sample[5], sample[6])
         local powerColor = PowerBarColor and PowerBarColor[sample[7]:upper()]
         if powerColor then card.power:SetStatusBarColor(powerColor.r, powerColor.g, powerColor.b) end
-        ns.Visuals:PaintRates(card, sample[8], sample[9], sample[8] - sample[9], "available")
         applyCardProfile(card)
         for slot, button in ipairs(card.debuffs) do
             button:SetShown(slot == 1)

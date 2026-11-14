@@ -2,10 +2,10 @@ local _, ns = ...
 local Visuals = {}
 ns.Visuals = Visuals
 -- Shared by live frames and preview; no separate mockup geometry.
-ns.Layout = {width=270, height=128, pitch=138, portrait=82, portraitInner=74,
+ns.Layout = {width=270, height=116, pitch=126, portrait=82, portraitInner=74,
     portraitX=184, healSize=36, healGap=2, healInset=4, auraSize=16, auraPitch=17, auraX=44,
-    debuffY=-76, buffY=-96, barX=5, barWidth=174, rateY=-60, rateHeight=12,
-    infoY=-15, locationY=-116}
+    debuffY=-64, buffY=-84, barX=5, barWidth=174,
+    infoY=-15, locationY=-104}
 local L = ns.Layout
 local MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local FONT = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
@@ -111,98 +111,6 @@ local function barTrim(card)
     card.power.text = text(trim, 5, -18, L.barWidth, 10, "CENTER")
 end
 
-local function rateBar(card)
-    local bar = CreateFrame("Frame", nil, card)
-    card.rateBar = bar
-    bar:SetPoint("TOPLEFT", L.barX, L.rateY)
-    bar:SetSize(L.barWidth, L.rateHeight)
-    bar:EnableMouse(false)
-    local track = bar:CreateTexture(nil, "BACKGROUND")
-    track:SetAllPoints()
-    track:SetColorTexture(0.025, 0.028, 0.032, 0.98)
-    bar.healingFill = bar:CreateTexture(nil, "ARTWORK")
-    bar.healingFill:SetPoint("TOPLEFT", 1, -1)
-    bar.healingFill:SetSize(L.barWidth - 2, L.rateHeight - 2)
-    bar.healingFill:SetColorTexture(0.045, 0.32, 0.105, 1)
-    bar.damageFill = bar:CreateTexture(nil, "ARTWORK")
-    bar.damageFill:SetPoint("TOPRIGHT", -1, -1)
-    bar.damageFill:SetSize(L.barWidth - 2, L.rateHeight - 2)
-    bar.damageFill:SetColorTexture(0.43, 0.065, 0.045, 1)
-    -- Fixed text columns never follow the moving meeting point of the fills.
-    local center = bar:CreateTexture(nil, "ARTWORK", nil, 1)
-    center:SetPoint("TOPLEFT", 58, 0)
-    center:SetSize(58, L.rateHeight)
-    center:SetColorTexture(0.01, 0.012, 0.014, 0.3)
-    card.healRate = text(bar, 2, -1, 53, 9, "LEFT")
-    card.netRate = text(bar, 58, -1, 58, 9, "CENTER")
-    card.damageRate = text(bar, 119, -1, 53, 9, "RIGHT")
-    card.rateUnavailable = text(bar, 2, -1, L.barWidth - 4, 9, "CENTER")
-    card.rateUnavailable:SetTextColor(0.65, 0.65, 0.65)
-    card.healRate:SetTextColor(0.65, 1, 0.68)
-    card.damageRate:SetTextColor(1, 0.7, 0.63)
-end
-
-local function finite(value)
-    return not ns.IsSecret(value) and type(value) == "number"
-        and value == value and value > -math.huge and value < math.huge
-end
-
-local function rateText(value, signed)
-    local magnitude = math.floor(math.abs(value) + 0.5)
-    local result
-    if magnitude < 1000 then
-        result = string.format("%.0f", magnitude)
-    elseif magnitude >= 999500000000 then
-        result = string.format("%.0e", magnitude):gsub("e%+0*", "e")
-    else
-        local divisor, suffix = 1000, "k"
-        if magnitude >= 999500000 then divisor, suffix = 1000000000, "b"
-        elseif magnitude >= 999500 then divisor, suffix = 1000000, "m" end
-        local scaled = magnitude / divisor
-        result = (string.format(scaled < 100 and "%.1f" or "%.0f", scaled):gsub("%.0$", "")) .. suffix
-    end
-    if signed then result = (value < 0 and magnitude > 0 and "-" or "+") .. result end
-    return result .. "/s"
-end
-
-function Visuals:PaintRates(card, heal, damage, net, status)
-    local bar = card.rateBar
-    local available = status == "available" and finite(heal) and finite(damage) and finite(net)
-        and heal >= 0 and damage >= 0
-    card.rateStatus = available and "available" or (status ~= "available" and status or "Rates unavailable")
-    card.healingPerSecond, card.damagePerSecond, card.netPerSecond = nil, nil, nil
-    bar.healingFill:SetAlpha(0)
-    bar.damageFill:SetAlpha(0)
-    for _, label in ipairs({card.healRate, card.netRate, card.damageRate}) do label:SetAlpha(available and 1 or 0) end
-    card.rateUnavailable:SetAlpha(available and 0 or 1)
-    if not available then
-        card.rateUnavailable:SetText(status == "Collecting rates" and "Collecting rates..." or "Rates unavailable")
-        card.healRate:SetText("--")
-        card.damageRate:SetText("--")
-        card.netRate:SetText(status == "Collecting rates" and "..." or "--")
-        card.netRate:SetTextColor(0.65, 0.65, 0.65)
-        return
-    end
-    card.healingPerSecond, card.damagePerSecond, card.netPerSecond = heal, damage, net
-    card.healRate:SetText(rateText(heal))
-    card.damageRate:SetText(rateText(damage))
-    card.netRate:SetText(rateText(net, true))
-    if net >= 0.5 then card.netRate:SetTextColor(0.75, 1, 0.78)
-    elseif net <= -0.5 then card.netRate:SetTextColor(1, 0.76, 0.7)
-    else card.netRate:SetTextColor(0.93, 0.93, 0.9) end
-    -- Normalize before adding: two valid finite rates can overflow their sum.
-    local peak = math.max(heal, damage)
-    if peak > 0 then
-        local left, right = heal / peak, damage / peak
-        local share = left / (left + right)
-        local width = L.barWidth - 2
-        bar.healingFill:SetWidth(math.max(0.01, width * share))
-        bar.damageFill:SetWidth(math.max(0.01, width * (1 - share)))
-        bar.healingFill:SetAlpha(heal > 0 and 1 or 0)
-        bar.damageFill:SetAlpha(damage > 0 and 1 or 0)
-    end
-end
-
 function Visuals:DecorateSpellButton(button, size)
     button:SetSize(size, size)
     button.border = button:CreateTexture(nil, "BACKGROUND")
@@ -281,8 +189,6 @@ function Visuals:DecorateUnit(card)
     card.presetLabel:SetTextColor(0.88, 0.78, 0.53)
     card.location = text(card, L.barX, L.locationY, L.barWidth, 8)
     card.location:SetTextColor(0.7, 0.77, 0.85)
-    rateBar(card)
-    self:PaintRates(card, nil, nil, nil, "Collecting rates")
     card.debuffLabel = text(card, L.barX, L.debuffY - 4, 35, 8, "RIGHT")
     card.debuffLabel:SetText("Debuffs")
     card.debuffLabel:SetTextColor(0.9, 0.8, 0.72)

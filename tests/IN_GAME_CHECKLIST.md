@@ -7,10 +7,10 @@ Record the client build, addon version, pass/fail results, and exact error text 
 ## Load and appearance
 
 - [ ] The addon appears in the AddOns list and loads without Lua errors.
-- [ ] While solo, `/wpf test` shows four floating vanilla-style frames with attached bars, class colors, numerical resources, and readable rates and aura rows. There is no enclosing window, border, background, or close button. A small caption identifies the preview, class icons stand in for portraits, and clicking casts nothing.
+- [ ] While solo, `/wpf test` shows four floating vanilla-style frames with attached bars, class colors, numerical resources, and readable aura rows. There is no enclosing window, border, background, or close button. A small caption identifies the preview, class icons stand in for portraits, and clicking casts nothing.
 - [ ] Portraits appear on the right of the bars. Portrait hover reveals four full square buttons in Buttons mode, or circular quadrants in Quadrants mode. Switching modes retains all spells, persists across reload, and is refused during combat. Leaving the controls restores the portrait.
 - [ ] Test at the UI scale and screen resolution actually used in play. Names, resource totals, spell ranks, and timers do not overlap or become clipped.
-- [ ] Check 82-unit portraits, 36×36 healing buttons, 174-unit bars, and 138-unit member spacing. The existing native silver trim, green health and resource fills keep their appearance. Ranks remain inside both control styles; eight debuffs and eight combined buff icons fit on two rows without overlapping controls or information labels.
+- [ ] Check 82-unit portraits, 36×36 healing buttons, 174-unit bars, and 126-unit member spacing. The existing native silver trim, green health and resource fills keep their appearance. Ranks remain inside both control styles; eight debuffs and eight combined buff icons fit on two rows without overlapping controls or information labels.
 - [ ] Confirm level/class/assigned role text under the name, followed by the assigned role and party-marker icons, with the selected preset below the portrait. Assign/clear each marker in the native drawer and verify the corresponding icon appears/disappears immediately, including in combat. Clearing a native role removes its text and icon. Neither class nor preset creates an assignment. Long detail text must not push icons over the portrait; Offline/Dead sits on the name line. Solo preview invents no role or marker.
 - [ ] Long preset names are available in the frame tooltip. A member in a different zone/dungeon shows that location; same-location members and unavailable data leave the location line empty. Changes and combat reorders must follow the correct member.
 - [ ] Hover spells on the top and bottom member. Tooltips sit outside the party stack. Move the stack near the right edge and verify tooltips switch to its left.
@@ -71,15 +71,10 @@ Record the client build, addon version, pass/fail results, and exact error text 
 - [ ] Observe Weakened Soul on a party member while another member is targeted. Confirm it remains visible with other debuffs.
 - [ ] Observe dead, disconnected, and out-of-range members; the display remains understandable and casts fail normally rather than hitting someone else.
 
-## Rates and unavailable data
+## Compact layout
 
-- [ ] With no public incoming-event API, rates explicitly show Rates unavailable and `/wpf status` explains the missing feed. Do not interpret this as a working rate calculation; current Forever is expected to lack the old public reader.
-- [ ] On a client with a permitted incoming-event feed, joining or changing zones shows Collecting rates... until a complete five-second window is available. Unrelated cast events with no destination do not reset it.
-- [ ] The rate bar shares the exact left and right edges of the health and resource bars. Healing is the left number, net the center number, and damage the right number. All three remain readable as the fills move.
-- [ ] In a context allowing combat data, incoming damage increases the red portion from the right and effective healing increases the green portion from the left. The split shows their relative proportions. Overhealing does not inflate healing/sec.
-- [ ] The displayed delta equals healing/sec minus damage/sec, allowing for rounding. Activity ages out after five seconds, returning available idle rates to zero.
-- [ ] Equal nonzero rates split the bar evenly. Healing-only is green, damage-only is red, and zero/zero leaves an empty track with zero values. Unavailable data clears old fills and numbers. Large values fit using compact notation, with unabridged rates in the unit tooltip.
-- [ ] If the client restricts combat data, rates show Rates unavailable. Native aura slots should continue matching and displaying assigned buffs in place. If native rendering is unavailable, the public fallback marks unknown assigned buffs `?`. `/wpf status` explains availability and the selected aura renderer.
+- [ ] Live frames and solo preview show no healing/damage/net bar, unavailable-rate placeholder, or rate tooltip. Debuffs sit directly below the resource bars with clearance for their icon rims; buffs and remote location follow without overlaps.
+- [ ] Native healing and absorption indicators remain visible inside the health bars. Portraits, healing buttons, and preset labels keep their existing sizes and positions.
 
 ## Combat and roster stability
 
