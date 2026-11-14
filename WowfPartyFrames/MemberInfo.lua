@@ -68,6 +68,8 @@ function MemberInfo:Get(unit, presetID)
     -- This is the native assigned role, never inferred from class or preset.
     if roleToken == "TANK" or roleToken == "HEALER" or roleToken == "DAMAGER" then
         result.roleToken = roleToken
+        local roles = {TANK=text(TANK) or "Tank", HEALER=text(HEALER) or "Healer", DAMAGER=text(DAMAGER) or "Damage"}
+        result.role = roles[roleToken]
     end
     local marker = call(GetRaidTargetIndex, unit)
     -- Native Texture:SetSpriteSheetCell accepts secret numeric cells. Retain
@@ -80,6 +82,9 @@ function MemberInfo:Get(unit, presetID)
     if result.level then identity[#identity + 1] = tostring(result.level) end
     if result.class then identity[#identity + 1] = result.class end
     result.summary = table.concat(identity, " ")
+    if result.role then
+        result.summary = result.summary ~= "" and (result.summary .. " · " .. result.role) or result.role
+    end
     local memberZone, playerZone = zone(unit), zone("player")
     if memberZone and playerZone and memberZone.id ~= playerZone.id then
         result.location = memberZone.name

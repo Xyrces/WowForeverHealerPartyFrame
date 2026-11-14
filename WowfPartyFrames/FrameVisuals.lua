@@ -29,19 +29,19 @@ function Visuals:PaintIdentityIcons(card, roleToken, markerIndex)
         card.markerIcon:SetShown(ok)
     end
     local count = (role and 1 or 0) + (marker and 1 or 0)
-    local maximum = L.barWidth - count * 16
-    card.name:SetWidth(maximum)
-    local width = card.name.GetStringWidth and card.name:GetStringWidth()
+    local maximum = L.barWidth - count * 14
+    card.memberInfo:SetWidth(maximum)
+    local width = card.memberInfo.GetStringWidth and card.memberInfo:GetStringWidth()
     if ns.IsSecret(width) or type(width) ~= "number" or width < 0 or width ~= width then width = maximum end
     local x = L.barX + math.min(width, maximum) + 2
     if role then
         card.roleIcon:ClearAllPoints()
-        card.roleIcon:SetPoint("TOPLEFT", card, "TOPLEFT", x, 0)
-        x = x + 16
+        card.roleIcon:SetPoint("TOPLEFT", card, "TOPLEFT", x, L.infoY + 1)
+        x = x + 14
     end
     if marker then
         card.markerIcon:ClearAllPoints()
-        card.markerIcon:SetPoint("TOPLEFT", card, "TOPLEFT", x, 0)
+        card.markerIcon:SetPoint("TOPLEFT", card, "TOPLEFT", x, L.infoY + 1)
     end
 end
 
@@ -265,17 +265,17 @@ function Visuals:DecorateUnit(card)
     card.portrait:SetPoint("CENTER")
     circleMask(area, card.portrait, L.portraitInner)
     card.portraitRim = portraitRim(area, L.portrait, "OVERLAY")
-    card.name = text(card, L.barX, 0, L.barWidth, 12)
+    card.name = text(card, L.barX, 0, L.barWidth - 40, 12)
     card.roleIcon = card:CreateTexture(nil, "OVERLAY")
-    card.roleIcon:SetSize(14, 14)
+    card.roleIcon:SetSize(12, 12)
     card.roleIcon:Hide()
     card.markerIcon = card:CreateTexture(nil, "OVERLAY")
-    card.markerIcon:SetSize(14, 14)
+    card.markerIcon:SetSize(12, 12)
     card.markerIcon:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcons")
     card.markerIcon:Hide()
-    card.status = text(card, L.barX + L.barWidth - 36, L.infoY, 36, 9, "RIGHT")
+    card.status = text(card, L.barX + L.barWidth - 36, -2, 36, 9, "RIGHT")
     card.status:SetTextColor(0.82, 0.8, 0.72)
-    card.memberInfo = text(card, L.barX, L.infoY, L.barWidth - 40, 9)
+    card.memberInfo = text(card, L.barX, L.infoY, L.barWidth, 9)
     card.memberInfo:SetTextColor(0.78, 0.78, 0.74)
     card.presetLabel = text(card, L.portraitX, -87, L.portrait, 9, "CENTER")
     card.presetLabel:SetTextColor(0.88, 0.78, 0.53)
