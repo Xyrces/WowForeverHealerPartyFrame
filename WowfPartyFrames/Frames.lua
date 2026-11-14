@@ -4,7 +4,6 @@ ns.Frames = Frames
 local QUESTION = "Interface\\Icons\\INV_Misc_QuestionMark"
 local EMPTY_NAME = "__WOWF_NO_MEMBER__"
 local L = ns.Layout
-local EXAMPLE_SPELLS = {heals={2050,2052,2061,139}, buffs={1243,14752,976}}
 
 local function public(value, kind)
     return not ns.IsSecret(value) and (not kind or type(value) == kind)
@@ -49,8 +48,10 @@ local function spellTooltip(button)
         end
     else
         GameTooltip:SetText("No spell assigned")
-        GameTooltip:AddLine("Open /wpf and select this member's class to assign a spell.", 0.85, 0.85, 0.85, true)
+        GameTooltip:AddLine("Open /wpf to edit presets. Right-click this member to assign one.", 0.85, 0.85, 0.85, true)
     end
+    local preset = ns.Profiles:GetPreset(button.card.presetID)
+    GameTooltip:AddLine("Preset: " .. (preset and preset.name or "Default"), 1, 0.82, 0)
     if button.preview then GameTooltip:AddLine("Preview only: no spells will be cast.", 1, 0.5, 0.25, true) end
     GameTooltip:Show()
 end
@@ -71,8 +72,8 @@ local function decorateControls(card, preview)
                 button:SetAttribute("checkselfcast", false)
                 button:SetAttribute("checkfocuscast", false)
                 button:SetAttribute("checkmouseovercast", false)
-                button:SetAttribute("type2", "target")
-                button:SetAttribute("*type2", "target")
+                button:SetAttribute("type2", "togglemenu")
+                button:SetAttribute("*type2", "togglemenu")
             end
             if kind == "heals" then
                 local x = (index - 1) % 2 * L.healSize + L.healInset
@@ -128,11 +129,12 @@ local function configureSpell(button, id)
 end
 
 local function applyCardProfile(card)
+    card.presetID = card.previewIndex and (ns.Settings and ns.Settings.presetID or "default")
+        or card.memberKey and ns.Assignments:GetPreset(card.memberKey) or nil
     local hasBuffs = false
     for _, kind in ipairs({"heals", "buffs"}) do
         for index, button in ipairs(card[kind]) do
-            local id = ns.Profiles:GetSpell(card.classToken, kind, index)
-            if card.previewIndex then id = id or EXAMPLE_SPELLS[kind][index] end
+            local id = ns.Profiles:GetSpell(card.presetID, kind, index)
             configureSpell(button, id)
             if kind == "buffs" and button.spellID then
                 hasBuffs = true
@@ -207,7 +209,9 @@ function Frames:Create()
         card:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
             GameTooltip:SetText(self.memberName or "Party member")
-            GameTooltip:AddLine("Left-click to target. Right-click for the unit menu.", 0.85, 0.85, 0.85, true)
+            local preset = ns.Profiles:GetPreset(self.presetID)
+            GameTooltip:AddLine("Preset: " .. (preset and preset.name or "Default"), 1, 0.82, 0)
+            GameTooltip:AddLine("Left-click to target. Right-click to assign a preset or open party actions.", 0.85, 0.85, 0.85, true)
             GameTooltip:AddLine("Rate bar: healing left, net center, damage right. Per second over the last 5 seconds.", 0.85, 0.85, 0.85, true)
             if self.rateStatus == "available" then
                 GameTooltip:AddLine(string.format("Healing %.1f/s  |  Net %+.1f/s  |  Damage %.1f/s",
@@ -309,17 +313,29 @@ end
 function Frames:RefreshRoster()
     if not self.anchor then return false end
     if ns.InCombat() then self.pendingRoster = true; return false end
+    if ns.worldSeen then ns.Assignments:BeginSession(ns.isReloadingUI) end
     if self.preview and (GetNumSubgroupMembers() > 0 or IsInRaid()) then self.preview:Hide() end
-    local members, nameCounts = {}, {}
+    local members, nameCounts, resolved = {}, {}, 0
+    local complete = true
     for index = 1, 4 do
         local unit = "party" .. index
         local name = not IsInRaid() and fullName(unit) or nil
         local _, class = UnitClass(unit)
         if not public(class, "string") then class = nil end
         if not class then name = nil end
-        members[index] = {name = name, class = class}
+        local key = name and ns.Assignments:Identity(unit)
+        members[index] = {name = name, class = class, key = key}
         if name then nameCounts[name] = (nameCounts[name] or 0) + 1 end
     end
+    local roster = {}
+    for _, member in ipairs(members) do
+        if member.name and nameCounts[member.name] == 1 and member.key then
+            roster[#roster + 1] = member
+            resolved = resolved + 1
+        elseif member.name then complete = false end
+    end
+    if not IsInRaid() and resolved < GetNumSubgroupMembers() then complete = false end
+    ns.Assignments:Sync(roster, complete)
     local changed = not self.rosterInitialized
     for index, header in ipairs(self.headers) do
         local name, class = members[index].name, members[index].class
@@ -327,20 +343,22 @@ function Frames:RefreshRoster()
         -- secure name filter could otherwise select the wrong class/member.
         if not name or nameCounts[name] ~= 1 then name, class = nil, nil end
         local card = self.cards[index]
-        if card.memberName ~= name or card.classToken ~= class then
+        local key = name and members[index].key
+        if card.memberName ~= name or card.classToken ~= class or card.memberKey ~= key then
             changed = true
             header:SetAttribute("nameList", name or EMPTY_NAME)
         end
-        card.classToken, card.memberName = class, name
+        card.classToken, card.memberName, card.memberKey = class, name, key
         SecureGroupHeader_Update(header)
         local color = colorFor(class)
         card.name:SetTextColor(color.r, color.g, color.b)
     end
     self.pendingRoster = false
     self.rosterInitialized = true
-    if changed or self.pendingProfiles then self:ApplyProfiles() end
+    self:ApplyProfiles()
     if changed then ns.Rates:SetUnits({"party1", "party2", "party3", "party4"}) end
     self:RefreshAll(true)
+    if ns.PresetMenus then ns.PresetMenus:RefreshPrompts() end
     return true
 end
 

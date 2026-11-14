@@ -27,7 +27,7 @@ function Settings:Assign(slot, clear)
         if not record then self.frame.note:SetText(reason); return false end
     end
     local ok
-    ok, reason = ns.Profiles:SetSpell(self.classToken, slot.kind, slot.index, record and record.id or nil)
+    ok, reason = ns.Profiles:SetSpell(self.presetID, slot.kind, slot.index, record and record.id or nil)
     if not ok then self.frame.note:SetText(reason); return false end
     if record then ClearCursor() end
     self:Refresh()
@@ -72,7 +72,7 @@ local function createSlot(parent, kind, index, x, y, width)
     end)
     button:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        local id = ns.Profiles:GetSpell(Settings.classToken, self.kind, self.index)
+        local id = ns.Profiles:GetSpell(Settings.presetID, self.kind, self.index)
         if id then GameTooltip:SetSpellByID(id) else GameTooltip:SetText("Drag a spell here") end
         if self.kind == "heals" then
             GameTooltip:AddLine(QUADRANT_LABELS[self.index] .. " portrait quadrant", 1, 0.82, 0)
@@ -86,11 +86,159 @@ local function createSlot(parent, kind, index, x, y, width)
     return button
 end
 
+function Settings:SelectPreset(id)
+    if not ns.Profiles:GetPreset(id) then return false end
+    self.presetID = id
+    self.menuPage = nil
+    if self.frame then self.frame.menu:Hide() end
+    self:Refresh()
+    if ns.Frames then
+        ns.Frames:ApplyProfiles()
+        ns.Frames:RefreshAll()
+    end
+    return true
+end
+
+function Settings:SavePresetAction(action, name, targetID)
+    if ns.InCombat() then return false, "Presets are locked during combat." end
+    targetID = targetID or self.presetID
+    local result, reason
+    if action == "new" or action == "duplicate" then
+        result, reason = ns.Profiles:Create(name, action == "duplicate" and targetID or nil)
+        if result then self:SelectPreset(result) end
+    elseif action == "rename" then
+        result, reason = ns.Profiles:Rename(targetID, name)
+    elseif action == "delete" then
+        result, reason = ns.Profiles:Delete(targetID)
+        if result and self.presetID == targetID then self:SelectPreset("default") end
+    else
+        return false, "Unknown preset action."
+    end
+    if result then self:Refresh() end
+    return result and true or false, reason
+end
+
+function Settings:PromptPresetAction(action)
+    self.frame.menu:Hide()
+    if ns.InCombat() then self.frame.note:SetText("Presets are locked during combat."); return end
+    local dialog = self.dialog
+    if not dialog then
+        dialog = CreateFrame("Frame", nil, self.frame, "BackdropTemplate")
+        self.dialog = dialog
+        dialog:SetSize(290, 144)
+        dialog:SetPoint("CENTER")
+        dialog:SetFrameLevel(self.frame:GetFrameLevel() + 25)
+        dialog:EnableMouse(true)
+        ns.SetBackdrop(dialog, { 0.075, 0.065, 0.045, 1 }, { 0.65, 0.51, 0.27, 1 })
+        dialog.title = label(dialog, "", 14, -14, "GameFontNormal")
+        dialog.title:SetWidth(262)
+        dialog.title:SetWordWrap(true)
+        dialog.input = CreateFrame("EditBox", nil, dialog, "InputBoxTemplate")
+        dialog.input:SetSize(250, 24)
+        dialog.input:SetPoint("TOPLEFT", 20, -43)
+        dialog.input:SetAutoFocus(false)
+        dialog.input:SetMaxLetters(32)
+        dialog.note = label(dialog, "", 14, -74, "GameFontHighlightSmall")
+        dialog.note:SetWidth(262)
+        dialog.note:SetWordWrap(true)
+        local accept = CreateFrame("Button", nil, dialog, "UIPanelButtonTemplate")
+        dialog.accept = accept
+        accept:SetSize(100, 23)
+        accept:SetPoint("BOTTOMRIGHT", -14, 12)
+        local cancel = CreateFrame("Button", nil, dialog, "UIPanelButtonTemplate")
+        cancel:SetSize(100, 23)
+        cancel:SetPoint("BOTTOMLEFT", 14, 12)
+        cancel:SetText("Cancel")
+        cancel:SetScript("OnClick", function() dialog:Hide() end)
+        local function save()
+            local ok, reason = self:SavePresetAction(dialog.action, dialog.input:GetText(), dialog.targetID)
+            if ok then dialog:Hide() else dialog.note:SetText(reason or "Unable to save preset.") end
+        end
+        accept:SetScript("OnClick", save)
+        dialog.input:SetScript("OnEnterPressed", save)
+        dialog.input:SetScript("OnEscapePressed", function() dialog:Hide() end)
+        dialog:SetScript("OnHide", function() dialog.input:ClearFocus() end)
+    end
+    dialog.action, dialog.targetID = action, self.presetID
+    local preset = ns.Profiles:GetPreset(self.presetID)
+    local titles = { new = "New preset", duplicate = "Duplicate preset", rename = "Rename preset" }
+    dialog.title:SetText(action == "delete" and ("Delete " .. preset.name .. "?") or titles[action])
+    dialog.note:SetText(action == "delete" and "Members using it return to Default." or "Choose a short, unique name.")
+    dialog.accept:SetText(action == "delete" and "Delete" or "Save")
+    dialog.input:SetText(action == "rename" and preset.name or "")
+    dialog.input:SetShown(action ~= "delete")
+    dialog:Show()
+    if action ~= "delete" then dialog.input:SetFocus(); dialog.input:HighlightText() end
+end
+
+function Settings:RefreshMenu()
+    local frame = self.frame
+    if not frame then return end
+    local entries, presets = {}, ns.Profiles:List()
+    local pages = math.max(1, math.ceil(#presets / 8))
+    if not self.menuPage then
+        self.menuPage = 1
+        for index, preset in ipairs(presets) do
+            if preset.id == self.presetID then self.menuPage = math.ceil(index / 8); break end
+        end
+    end
+    self.menuPage = math.max(1, math.min(pages, self.menuPage))
+    if self.menuPage > 1 then
+        entries[#entries + 1] = { name = "Previous presets", page = self.menuPage - 1 }
+    end
+    for index = (self.menuPage - 1) * 8 + 1, math.min(#presets, self.menuPage * 8) do
+        local preset = presets[index]
+        entries[#entries + 1] = { name = preset.name, id = preset.id }
+    end
+    if self.menuPage < pages then
+        entries[#entries + 1] = { name = "More presets...", page = self.menuPage + 1 }
+    end
+    entries[#entries + 1] = { name = "New preset...", action = "new" }
+    entries[#entries + 1] = { name = "Duplicate preset...", action = "duplicate" }
+    if self.presetID ~= "default" then
+        entries[#entries + 1] = { name = "Rename preset...", action = "rename" }
+        entries[#entries + 1] = { name = "Delete preset...", action = "delete" }
+    end
+    for _, option in ipairs(frame.presetOptions) do option:Hide() end
+    for index, entry in ipairs(entries) do
+        local option = frame.presetOptions[index]
+        if not option then
+            option = CreateFrame("Button", nil, frame.menu)
+            frame.presetOptions[index] = option
+            option:SetSize(196, 23)
+            option:SetPoint("TOPLEFT", 7, -6 - (index - 1) * 23)
+            option:SetNormalFontObject("GameFontHighlight")
+            local text = option:GetFontString()
+            text:ClearAllPoints()
+            text:SetPoint("LEFT", 20, 0)
+            text:SetWidth(170)
+            text:SetJustifyH("LEFT")
+            text:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 11, "")
+            option.check = option:CreateTexture(nil, "ARTWORK")
+            option.check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+            option.check:SetSize(18, 18)
+            option.check:SetPoint("LEFT", 0, 0)
+            option:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+            option:SetScript("OnClick", function(button)
+                if button.entry.page then Settings.menuPage = button.entry.page; Settings:RefreshMenu()
+                elseif button.entry.id then Settings:SelectPreset(button.entry.id)
+                else Settings:PromptPresetAction(button.entry.action) end
+            end)
+        end
+        option.entry = entry
+        option:SetText(entry.name)
+        option.check:SetShown(entry.id == self.presetID)
+        option:GetFontString():SetTextColor(1, entry.action and 0.82 or 1, entry.action and 0 or 1)
+        option:Show()
+    end
+    frame.menu:SetHeight(#entries * 23 + 12)
+end
+
 function Settings:Create()
     if self.frame then return self.frame end
     local frame = CreateFrame("Frame", "WowfPartyFramesSettings", UIParent, "BackdropTemplate")
     self.frame = frame
-    self.classToken = ns.CLASSES[1].token
+    self.presetID = self.presetID or "default"
     frame:SetSize(WIDTH, 330)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("DIALOG")
@@ -105,7 +253,7 @@ function Settings:Create()
     local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -3, -3)
     close:SetScript("OnClick", function() frame:Hide() end)
-    label(frame, "Party-member class", 17, -53, "GameFontHighlightSmall")
+    label(frame, "Preset", 17, -53, "GameFontHighlightSmall")
     local selector = CreateFrame("Button", nil, frame, "BackdropTemplate")
     frame.selector = selector
     selector:SetSize(154, 24)
@@ -134,44 +282,22 @@ function Settings:Create()
     selector:SetScript("OnMouseUp", function() paintSelector() end)
     local menu = CreateFrame("Frame", nil, frame, "BackdropTemplate")
     frame.menu = menu
-    menu:SetSize(154, #ns.CLASSES * 23 + 12)
-    menu:SetPoint("TOPLEFT", selector, "BOTTOMLEFT", 0, -2)
+    menu:SetSize(210, 120)
+    menu:SetPoint("TOPRIGHT", selector, "BOTTOMRIGHT", 0, -2)
     menu:SetFrameLevel(frame:GetFrameLevel() + 10)
     ns.SetBackdrop(menu, { 0.075, 0.065, 0.045, 1 }, { 0.65, 0.51, 0.27, 1 })
-    frame.classOptions = {}
-    for index, class in ipairs(ns.CLASSES) do
-        local token, name = class.token, class.name
-        local option = CreateFrame("Button", nil, menu)
-        option:SetSize(140, 23)
-        option:SetPoint("TOPLEFT", 7, -6 - (index - 1) * 23)
-        option:SetNormalFontObject("GameFontHighlight")
-        option:SetText(name)
-        local text = option:GetFontString()
-        text:ClearAllPoints()
-        text:SetPoint("LEFT", 20, 0)
-        text:SetWidth(116)
-        text:SetJustifyH("LEFT")
-        text:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 11, "")
-        option.check = option:CreateTexture(nil, "ARTWORK")
-        option.check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
-        option.check:SetSize(18, 18)
-        option.check:SetPoint("LEFT", 0, 0)
-        frame.classOptions[token] = option
-        option:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
-        local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[token]
-        if color then option:GetFontString():SetTextColor(color.r, color.g, color.b) end
-        option:SetScript("OnClick", function()
-            Settings.classToken = token
-            menu:Hide()
-            paintSelector()
-            Settings:Refresh()
-        end)
-    end
+    frame.presetOptions = {}
     menu:Hide()
     menu:SetScript("OnHide", function() paintSelector() end)
-    selector:SetScript("OnClick", function() menu:SetShown(not menu:IsShown()); paintSelector() end)
+    selector:SetScript("OnClick", function()
+        local opening = not menu:IsShown()
+        if opening then self.menuPage = nil end
+        self:RefreshMenu()
+        menu:SetShown(opening)
+        paintSelector()
+    end)
     paintSelector()
-    frame:SetScript("OnHide", function() menu:Hide(); GameTooltip:Hide() end)
+    frame:SetScript("OnHide", function() menu:Hide(); if self.dialog then self.dialog:Hide() end; GameTooltip:Hide() end)
 
     label(frame, "Healing abilities", 17, -80, "GameFontNormal")
     self.healSlots, self.buffSlots = {}, {}
@@ -202,18 +328,13 @@ end
 function Settings:Refresh()
     local frame = self.frame
     if not frame then return end
-    for _, class in ipairs(ns.CLASSES) do
-        if class.token == self.classToken then
-            frame.selector.title:SetText(class.name)
-            local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[class.token]
-            if color then frame.selector.title:SetTextColor(color.r, color.g, color.b)
-            else frame.selector.title:SetTextColor(1, 0.82, 0) end
-        end
-        frame.classOptions[class.token].check:SetShown(class.token == self.classToken)
-    end
+    if not ns.Profiles:GetPreset(self.presetID) then self.presetID = "default" end
+    frame.selector.title:SetText(ns.Profiles:GetPreset(self.presetID).name)
+    frame.selector.title:SetTextColor(1, 0.82, 0)
+    self:RefreshMenu()
     local locked = ns.InCombat()
     local function paint(slot)
-        local id = ns.Profiles:GetSpell(self.classToken, slot.kind, slot.index)
+        local id = ns.Profiles:GetSpell(self.presetID, slot.kind, slot.index)
         local spell = ns.Spells:Get(id)
         slot.icon:SetTexture(spell and spell.icon or "Interface\\PaperDoll\\UI-Backpack-EmptySlot")
         slot.icon:SetDesaturated(locked)
@@ -231,7 +352,7 @@ function Settings:Refresh()
     for _, slot in ipairs(self.healSlots) do paint(slot) end
     local firstEmpty, visible = nil, {}
     for index, slot in ipairs(self.buffSlots) do
-        local configured = ns.Profiles:GetSpell(self.classToken, "buffs", index) ~= nil
+        local configured = ns.Profiles:GetSpell(self.presetID, "buffs", index) ~= nil
         if not configured and not firstEmpty then firstEmpty = index end
         if configured then visible[#visible + 1] = slot else slot:Hide() end
         paint(slot)

@@ -16,15 +16,28 @@ Record the client build, addon version, pass/fail results, and exact error text 
 
 ## Simple settings and ranks
 
-- [ ] `/wpf settings` contains one recipient-class selector, four healing slots, and buff slots; fresh profiles have no preassigned spells.
-- [ ] The class dropdown has a native arrow graphic, hover/pressed feedback, class-colored names, and a checkmark for the selected class. Choosing a class closes the menu and updates the assignments.
-- [ ] Select Warrior and assign two ranks of one heal to different quadrants. The visible ranks match the spellbook.
+- [ ] `/wpf settings` contains one preset selector, four healing slots, and buff slots; fresh profiles have an empty editable Default preset.
+- [ ] Existing nonempty class configurations migrate to named presets, preserving every assigned spell and rank. They are not automatically assigned by class.
+- [ ] The preset dropdown has a native arrow graphic, hover/pressed feedback, and a selection checkmark. New, Duplicate, Rename, and Delete work; duplicate edits do not alter the source. Long lists paginate and keep management actions reachable. Default cannot be renamed or deleted.
+- [ ] Create Tank and assign two ranks of one heal to different quadrants. The visible ranks match the spellbook.
 - [ ] With the solo preview open, drop a different spell or rank into a settings slot. The cursor clears and both settings and the matching preview quadrant update immediately, with no Lua errors. Preview buttons still cast nothing.
-- [ ] Assign different spells to Mage. Returning to Warrior retains the Warrior assignments.
+- [ ] Assign different spells to Caster. Returning to Tank retains Tank's assignments.
+- [ ] Clearing a spell also clears it in the open preview. Deleting the selected preset immediately displays Default and its spells in settings and preview.
 - [ ] Drag a buff into the empty slot. Another empty slot appears, up to eight assigned buffs.
 - [ ] Right-click a middle buff slot to clear it; remaining assignments stay intact and the empty slot can be reused.
 - [ ] Dropping an item or other invalid cursor content does not erase the old spell or consume the cursor item.
 - [ ] Assignments and exact ranks survive `/reload`.
+
+## Preset assignment and remembered choices
+
+- [ ] New members use Default regardless of class. Right-click the frame body, a portrait quadrant, or a buff: the normal native actions remain, with Assign preset and a checkmark beside the active preset. Long preset submenus scroll.
+- [ ] Assign Tank to a druid and then Caster to the same player. The four heals and buffs change immediately; name color remains the druid class color. The active preset appears in tooltips, with no added permanent frame controls.
+- [ ] Edit an assigned preset and verify every member using it updates. Delete it and verify those members return to Default, with stale remembered references cleared.
+- [ ] Have a previously assigned player leave and rejoin. Default is active while the ten-second remembered-preset prompt is visible. Confirm applies the named preset to that player.
+- [ ] Let a prompt expire, or click Keep Default: Default stays active. Rejoin again and verify the previous preference is still offered. Explicitly choose Default in the right-click menu and verify that choice replaces the remembered preference.
+- [ ] Multiple joining players receive independent prompts. Reordering the party cannot apply one player's suggestion to another. A departed player's old menu cannot change another member's preset.
+- [ ] `/reload` keeps current assignments and remaining prompt time without new prompts. A new login offers remembered choices again. Different characters' remembered choices remain separate.
+- [ ] Combat and loading screens hide prompts and pause their remaining time. The preset menu refuses changes during combat, including when combat begins after opening it. After combat, prompts and assignments reconcile with the current roster.
 
 ## Live party actions
 
@@ -33,7 +46,7 @@ Record the client build, addon version, pass/fail results, and exact error text 
 - [ ] Target one member, then heal a different member through each configured portrait quadrant. The intended member receives the intended rank and the original target remains selected.
 - [ ] Repeat with two ranks of the same heal, checking the cast/spellbook information and mana use as appropriate.
 - [ ] Missing assigned buffs offer reapplication; clicking applies the selected rank to the displayed member without changing the current target.
-- [ ] Right-click a buff to target its member. Holding Shift, Ctrl, or Alt while left-clicking a heal or buff still casts on the displayed member.
+- [ ] Right-click a buff to open its member's native menu. Holding Shift, Ctrl, or Alt while left-clicking a heal or buff still casts on the displayed member.
 - [ ] Active buffs show their available timers/stacks. Let one expire and verify that its missing-state display returns.
 - [ ] Apply another rank of an assigned buff and verify it is recognized as present when aura data is readable.
 - [ ] Observe Weakened Soul on a party member while another member is targeted. Confirm it remains visible with other debuffs.
@@ -53,10 +66,10 @@ Record the client build, addon version, pass/fail results, and exact error text 
 - [ ] Enter combat with spells configured. Existing healing and buff buttons still cast on the correct members without protected-action errors.
 - [ ] Try changing or clearing settings in combat. The change is refused and assignments remain intact.
 - [ ] Attempt movement/position commands in combat. Protected positions are not changed; no errors occur.
-- [ ] Reorder a party containing different classes during combat. Each displayed name retains the appropriate class assignments and every cast still reaches that named member.
-- [ ] Have a member leave and another join during combat. The newcomer is deferred until combat ends; no old button casts on the wrong class/member.
+- [ ] Reorder a party containing different classes during combat. Each displayed name retains its assigned preset and every cast still reaches that named member.
+- [ ] Have a member leave and another join during combat. The newcomer is deferred until combat ends; no old button casts on the wrong member.
 - [ ] After combat, verify the roster and new member's assignments update correctly.
-- [ ] Members with unresolved names are not bound to class spells until their unique names become available. No frame labeled Unknown casts on a different member.
+- [ ] Members with unresolved names are not bound to spells until their unique names become available. No frame labeled Unknown casts on a different member. Temporarily unresolved roster entries do not erase existing preset choices.
 - [ ] Leave and rejoin the party, enter and exit a raid, change zones, and `/reload`. No stale party names, duplicate frames, or Lua errors remain.
 
 ## Result

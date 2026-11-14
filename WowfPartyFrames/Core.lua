@@ -6,17 +6,23 @@ local elapsedDisplay, elapsedAuras = 0, 0
 local function start()
     if ns.started or ns.InCombat() then return end
     ns.db = ns.Profiles:Init(WowfPartyFramesDB)
+    ns.Assignments:Init(ns.db)
+    if ns.worldSeen then ns.Assignments:BeginSession(ns.isReloadingUI) end
     ns.Rates:Initialize()
     if not ns.Frames:Create() then return end
     ns.Settings:Create()
+    ns.PresetMenus:Initialize()
     ns.started = true
     ns.Frames:SetBlizzardVisible(ns.db.showBlizzard == true)
-    ns.Print("Loaded. /wpf opens class assignments; /wpf test shows a preview.")
+    ns.Print("Loaded. /wpf edits presets; right-click a party frame to assign one.")
 end
 
 function ns.OnProfileChanged()
+    ns.Assignments:PrunePresets()
+    ns.Settings:Refresh()
     ns.Frames:ApplyProfiles()
     ns.Frames:RefreshAll(true)
+    ns.PresetMenus:RefreshPrompts()
 end
 
 local function report(ok, message)
@@ -52,7 +58,23 @@ SlashCmdList.WOWFPARTYFRAMES = function(input)
     end
 end
 
-events:SetScript("OnEvent", function(_, event, name)
+events:SetScript("OnEvent", function(_, event, name, second)
+    if event == "PLAYER_ENTERING_WORLD" then
+        ns.worldActive = true
+        if not ns.worldSeen then ns.isReloadingUI = second == true end
+        ns.worldSeen = true
+        start()
+        if ns.started then
+            ns.Assignments:BeginSession(ns.isReloadingUI)
+            ns.Frames:RefreshRoster()
+        end
+        return
+    end
+    if event == "PLAYER_LEAVING_WORLD" then
+        ns.worldActive = false
+        if ns.started then ns.PresetMenus:RefreshPrompts() end
+        return
+    end
     if event == "ADDON_LOADED" then
         if name == addonName then
             events:UnregisterEvent("ADDON_LOADED")
@@ -63,6 +85,7 @@ events:SetScript("OnEvent", function(_, event, name)
     if event == "PLAYER_LOGIN" or event == "PLAYER_REGEN_ENABLED" then
         start()
         if ns.started then
+            if ns.worldSeen then ns.Assignments:BeginSession(ns.isReloadingUI) end
             if ns.Frames.positionDirty then ns.Frames:SavePosition() end
             ns.Frames:RefreshRoster()
             if ns.Frames.unlocked then ns.Frames:SetUnlocked(true) end
@@ -73,7 +96,8 @@ events:SetScript("OnEvent", function(_, event, name)
             ns.Frames:StopMoving()
             ns.Frames.mover:Hide()
             if ns.Frames.preview then ns.Frames.preview:Hide() end
-        elseif event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ENTERING_WORLD"
+            ns.PresetMenus:RefreshPrompts()
+        elseif event == "GROUP_ROSTER_UPDATE"
             or (event == "UNIT_NAME_UPDATE" and not ns.IsSecret(name)
                 and type(name) == "string" and name:match("^party[1-4]$")) then
             ns.Frames:RefreshRoster()
@@ -88,13 +112,14 @@ events:SetScript("OnUpdate", function(_, elapsed)
     if not ns.started then return end
     elapsedDisplay, elapsedAuras = elapsedDisplay + elapsed, elapsedAuras + elapsed
     if elapsedDisplay < 0.1 then return end
+    ns.PresetMenus:Update(elapsedDisplay)
     elapsedDisplay = 0
     local refreshAuras = elapsedAuras >= 0.25
     if refreshAuras then elapsedAuras = 0 end
     ns.Frames:RefreshAll(refreshAuras)
 end)
 
-for _, event in ipairs({"ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_ENABLED",
+for _, event in ipairs({"ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "PLAYER_LEAVING_WORLD", "PLAYER_REGEN_ENABLED",
     "PLAYER_REGEN_DISABLED", "GROUP_ROSTER_UPDATE", "UNIT_NAME_UPDATE", "UNIT_AURA", "SPELLS_CHANGED", "SPELL_TEXT_UPDATE"}) do
     events:RegisterEvent(event)
 end
