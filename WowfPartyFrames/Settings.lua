@@ -77,6 +77,53 @@ local function paintChoice(button, selected, locked)
     button:SetAlpha(locked and 0.55 or 1)
 end
 
+function Settings:SetHistoryValue(field, value)
+    local history = ns.HealthHistory
+    if not history then return false end
+    local seconds = type(value) == "string" and tonumber(value) or value
+    local ok, reason
+    if field == "step" then ok, reason = history:SetSampleInterval(seconds)
+    elseif field == "total" then ok, reason = history:SetWindowSeconds(seconds)
+    else return false end
+    if ok then
+        if ns.Frames then ns.Frames:RefreshAll(false) end
+        self:Refresh()
+    elseif self.frame then self.frame.note:SetText(reason) end
+    return ok, reason
+end
+
+local function historyInput(frame, field)
+    local edit = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
+    edit:SetSize(56, 22)
+    edit:SetAutoFocus(false)
+    edit:SetMaxLetters(16)
+    edit:SetScript("OnEnterPressed", function(self)
+        if self:GetText() == self.savedText then self:ClearFocus(); return end
+        if Settings:SetHistoryValue(field, self:GetText()) then
+            -- Normalize before focus loss, so Enter doesn't commit twice or
+            -- round a linked value back through its formatted display text.
+            self:SetText(self.savedText or ""); self:ClearFocus()
+        end
+    end)
+    edit:SetScript("OnEditFocusLost", function(self)
+        if self:GetText() ~= self.savedText then
+            if not Settings:SetHistoryValue(field, self:GetText()) then self:SetText(self.savedText or "") end
+        end
+    end)
+    edit:SetScript("OnEscapePressed", function(self)
+        self:SetText(self.savedText or ""); self:ClearFocus(); Settings:Refresh()
+    end)
+    edit:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(field == "step" and "Seconds between health samples" or "Total health history in seconds")
+        GameTooltip:AddLine("Twelve samples. Minimum step: 0.25 sec; minimum history: 3 sec. Changing either updates both.", 0.85, 0.85, 0.85, true)
+        if ns.InCombat() then GameTooltip:AddLine("Change after combat ends.", 1, 0.3, 0.3) end
+        GameTooltip:Show()
+    end)
+    edit:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    return edit
+end
+
 local function createSlot(parent, kind, index, x, y, width)
     local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
     local buff = kind == "buffs"
@@ -377,6 +424,14 @@ function Settings:Create()
         control:SetScript("OnLeave", function() GameTooltip:Hide() end)
         frame.styleButtons[id] = control
     end
+    frame.cleanseButton = choice(frame, "Debuff removal...", WIDTH - 34, function()
+        if ns.CleanseSettings then ns.CleanseSettings:Toggle() end
+    end)
+    frame.historyLabel = label(frame, "Health history", 17, -399, "GameFontHighlightSmall")
+    frame.historyStepLabel = label(frame, "Step (sec)", 115, -395, "GameFontHighlightSmall")
+    frame.historyTotalLabel = label(frame, "Total (sec)", 227, -395, "GameFontHighlightSmall")
+    frame.historyStep = historyInput(frame, "step")
+    frame.historyTotal = historyInput(frame, "total")
     frame.note = label(frame, "", 17, -363, "GameFontHighlightSmall")
     frame.note:SetWidth(WIDTH - 34)
     frame.note:SetJustifyH("LEFT")
@@ -437,7 +492,7 @@ function Settings:Refresh()
         slot:Show()
     end
     local rows = math.max(1, math.ceil(#visible / 4))
-    frame:SetHeight(389 + (rows - 1) * BUFF_ROW)
+    frame:SetHeight(477 + (rows - 1) * BUFF_ROW)
     frame.styleLabel:ClearAllPoints()
     frame.styleLabel:SetPoint("TOPLEFT", 17, -337 - (rows - 1) * BUFF_ROW)
     for index, id in ipairs({"buttons", "quadrants"}) do
@@ -445,8 +500,25 @@ function Settings:Refresh()
         control:ClearAllPoints()
         control:SetPoint("TOPLEFT", 132 + (index - 1) * 96, -331 - (rows - 1) * BUFF_ROW)
     end
+    local offset = (rows - 1) * BUFF_ROW
+    frame.cleanseButton:ClearAllPoints()
+    frame.cleanseButton:SetPoint("TOPLEFT", 17, -363 - offset)
+    frame.historyLabel:ClearAllPoints()
+    frame.historyLabel:SetPoint("TOPLEFT", 17, -413 - offset)
+    for _, info in ipairs({{frame.historyStepLabel, 116}, {frame.historyTotalLabel, 228}}) do
+        info[1]:ClearAllPoints(); info[1]:SetPoint("TOPLEFT", info[2], -395 - offset)
+    end
+    local history = ns.HealthHistory
+    for _, info in ipairs({{frame.historyStep, 120, history and history:GetSampleInterval() or 0.25},
+        {frame.historyTotal, 232, history and history:GetWindowSeconds() or 3}}) do
+        local edit = info[1]
+        edit:ClearAllPoints(); edit:SetPoint("TOPLEFT", info[2], -410 - offset)
+        edit.savedText = string.format("%.6g", info[3])
+        if not edit.HasFocus or not edit:HasFocus() then edit:SetText(edit.savedText) end
+        edit:SetAlpha(locked and 0.55 or 1)
+    end
     frame.note:ClearAllPoints()
-    frame.note:SetPoint("TOPLEFT", 17, -363 - (rows - 1) * BUFF_ROW)
+    frame.note:SetPoint("TOPLEFT", 17, -447 - offset)
     frame.note:SetText(locked and "Assignments are locked during combat."
         or "Drag spells here. Ranks are saved. Right-click to clear.")
 end

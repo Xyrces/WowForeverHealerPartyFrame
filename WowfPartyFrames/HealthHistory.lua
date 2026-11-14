@@ -2,8 +2,10 @@ local _, ns = ...
 local History = {}
 ns.HealthHistory = History
 
-local COUNT, INTERVAL = 12, 0.25
-local GAP = COUNT * INTERVAL
+local COUNT, DEFAULT_INTERVAL = 12, 0.25
+local EPSILON = 0.000001
+History.SAMPLE_INTERVALS = {0.25, 0.5, 1, 2, 5}
+local cards = setmetatable({}, {__mode="k"})
 local stops = {{0,200,50,55},{0.15,226,68,65},{0.45,235,139,50},
     {0.70,222,203,68},{0.90,64,191,96},{1,64,191,96}}
 local curve, curveAttempted, colorAvailable
@@ -15,6 +17,53 @@ end
 local function publicString(value)
     return not secret(value) and type(value) == "string" and value ~= ""
 end
+local function validInterval(value)
+    return publicNumber(value) and value >= DEFAULT_INTERVAL and publicNumber(value * COUNT)
+end
+
+function History:GetSampleInterval()
+    local value = ns.db and ns.db.historySampleInterval
+    return validInterval(value) and value or DEFAULT_INTERVAL
+end
+
+function History:GetWindowSeconds()
+    return COUNT * self:GetSampleInterval()
+end
+
+function History:SetSampleInterval(seconds)
+    if InCombatLockdown and InCombatLockdown() then
+        return false, "Change the history step after combat ends."
+    end
+    if not validInterval(seconds) then
+        return false, "Enter a finite history step of at least 0.25 seconds."
+    end
+    local previous = self:GetSampleInterval()
+    ns.db = ns.db or {}
+    ns.db.historySampleInterval = seconds
+    if previous ~= seconds then
+        for card in pairs(cards) do
+            self:Clear(card)
+            local state = card.healthHistory
+            state.interval = seconds
+            state.retryAt, state.retryIdentity = nil, nil
+        end
+        self.reason = nil
+    end
+    return true
+end
+
+function History:SetWindowSeconds(seconds)
+    if InCombatLockdown and InCombatLockdown() then
+        return false, "Change the history duration after combat ends."
+    end
+    if not publicNumber(seconds) or seconds < COUNT * DEFAULT_INTERVAL then
+        return false, "Enter a finite total history of at least 3 seconds."
+    end
+    -- Keep only the interval in saved variables so the two settings cannot
+    -- drift apart; the twelve visible rows determine the total duration.
+    return self:SetSampleInterval(seconds / COUNT)
+end
+
 local function identityOf(card, unit)
     local guid = UnitGUID(unit)
     local readableGUID = publicString(guid) and guid or nil
@@ -84,8 +133,9 @@ function History:Create(card)
     if card.healthHistory then return card.healthHistory.supported end
     if InCombatLockdown and InCombatLockdown() then return false end
     initializeCurve()
-    local state = {rows={}, samples={}, supported=false}
+    local state = {rows={}, samples={}, supported=false, interval=self:GetSampleInterval()}
     card.healthHistory = state
+    cards[card] = true
     local ok = pcall(function()
         local holder = CreateFrame("Frame", nil, card.health)
         state.holder = holder
@@ -119,9 +169,17 @@ function History:Update(card, unit, now)
     if not state or not state.supported then return false end
     now = now or GetTime()
     if not publicNumber(now) then self:Clear(card); return false end
+    local interval = self:GetSampleInterval()
+    -- Do not mix rows sampled at different cadences, including when a saved
+    -- setting is restored by another part of the addon between updates.
+    if state.interval ~= interval then
+        self:Clear(card)
+        state.interval = interval
+        state.retryAt, state.retryIdentity = nil, nil
+    end
     -- Identity queries can fail before there is a member key to compare.
     -- Back off those native failures too, without re-entering their APIs.
-    if state.retryAt and not state.retryIdentity and now < state.retryAt then return false end
+    if state.retryAt and not state.retryIdentity and now + EPSILON < state.retryAt then return false end
     local attemptedIdentity
     local ok, updated = pcall(function()
         if secret(unit) or type(unit) ~= "string" or not unit:match("^party[1-4]$") then
@@ -135,18 +193,18 @@ function History:Update(card, unit, now)
             self:Clear(card); return false
         end
         if state.identity ~= identity or state.preview or (guid and state.guid and guid ~= state.guid) then self:Clear(card) end
-        if state.last and (now < state.last or now - state.last >= GAP) then self:Clear(card) end
+        if state.last and (now < state.last or now - state.last + EPSILON >= COUNT * interval) then self:Clear(card) end
         state.identity = identity
         if guid then state.guid = guid end
         attemptedIdentity = identity
-        if state.retryIdentity == identity and state.retryAt and now < state.retryAt then return false end
+        if state.retryIdentity == identity and state.retryAt and now + EPSILON < state.retryAt then return false end
         state.retryAt, state.retryIdentity = nil, nil
-        if state.last and now - state.last < INTERVAL then return false end
+        if state.last and now - state.last + EPSILON < interval then return false end
         local health, maximum = UnitHealth(unit, false), UnitHealthMax(unit)
         if (not secret(health) and (not publicNumber(health) or health < 0))
             or (not secret(maximum) and (not publicNumber(maximum) or maximum <= 0)) then
             self:Clear(card)
-            state.retryAt, state.retryIdentity = now + INTERVAL, identity
+            state.retryAt, state.retryIdentity = now + interval, identity
             self.reason = "unavailable: health data missing"; return false
         end
         local color = {64/255,191/255,96/255}
@@ -158,9 +216,11 @@ function History:Update(card, unit, now)
             if colorOK then color = {r,g,b} end
         end
         -- Keep real history through brief stalls without manufacturing samples
-        -- for the missed quarter-second slots. False is an explicit blank row.
+        -- for missed sampling slots. False is an explicit blank row. A tiny
+        -- clock tolerance prevents fractional steps from losing a row
+        -- because subtraction lands just below the exact interval.
         if state.last then
-            local missed = math.floor((now - state.last) / INTERVAL) - 1
+            local missed = math.floor((now - state.last + EPSILON) / interval) - 1
             for _ = 1, missed do state.samples[#state.samples + 1] = false end
         end
         state.samples[#state.samples + 1] = {health=health, maximum=maximum, color=color}
@@ -172,7 +232,7 @@ function History:Update(card, unit, now)
     end)
     if not ok then
         self:Clear(card)
-        state.retryAt, state.retryIdentity = now + INTERVAL, attemptedIdentity
+        state.retryAt, state.retryIdentity = now + interval, attemptedIdentity
         self.reason = "unavailable: native update failed"
     end
     return ok and updated
@@ -211,5 +271,6 @@ end
 function History:GetStatus()
     if self.reason then return self.reason end
     if not curveAttempted then return "not initialized" end
-    return "0.25s samples / 3s history; " .. (colorAvailable and "native health colors" or "uniform green (native color curve unavailable)")
+    return string.format("%gs samples / %gs history; ", self:GetSampleInterval(), self:GetWindowSeconds())
+        .. (colorAvailable and "native health colors" or "uniform green (native color curve unavailable)")
 end

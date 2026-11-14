@@ -210,11 +210,13 @@ local function decorateControls(card, preview)
     ns.Visuals:ApplyControlStyle(card)
     if not preview and ns.AuraDisplay then ns.AuraDisplay:Create(card) end
     if not preview and ns.HealAuraDisplay then ns.HealAuraDisplay:Create(card) end
+    if not preview and ns.CleanseDisplay then ns.CleanseDisplay:Create(card) end
     card:HookScript("OnHide", function(self)
         if Frames.tooltipButton and Frames.tooltipButton.card == self then hideTooltip() end
         if ns.HoverPrediction then ns.HoverPrediction:Clear(self) end
         if ns.HealthHistory and not preview then ns.HealthHistory:Clear(self) end
         if ns.HealAuraDisplay then ns.HealAuraDisplay:Clear(self) end
+        if ns.CleanseDisplay then ns.CleanseDisplay:Clear(self) end
     end)
 end
 
@@ -279,12 +281,20 @@ local function applyCardProfile(card)
     card.presetLabel:SetText("Preset: " .. (preset and preset.name or "Default"))
     if not card.previewIndex and ns.AuraDisplay then ns.AuraDisplay:ConfigureBuffs(card) end
     if not card.previewIndex and ns.HealAuraDisplay then ns.HealAuraDisplay:Configure(card) end
+    if ns.CleanseDisplay then ns.CleanseDisplay:Configure(card) end
     ns.Visuals:ApplyControlStyle(card)
     paintHealing(card)
 end
 
 function Frames:ApplyProfiles()
     if ns.InCombat() then self.pendingProfiles = true; return false end
+    if self.anchor and ns.Cleanses then
+        local count = #ns.Cleanses:GetActions()
+        -- Reserve screen-clamping space, without widening the member's target
+        -- button underneath the conditional cleanse controls.
+        local width = count > 0 and L.portraitX + L.portrait + 8 + math.floor((count-1)/2)*96 + 91 or L.width
+        self.anchor:SetWidth(math.max(L.width, width))
+    end
     for _, card in ipairs(self.cards) do applyCardProfile(card) end
     if self.preview then
         for _, card in ipairs(self.preview.cards) do applyCardProfile(card) end
@@ -369,7 +379,7 @@ function Frames:Create()
                 GameTooltip:AddLine("Health bar: incoming heals extend the fill; shields use a light pattern; healing absorption covers health. Edge glows indicate overflow.", 0.75, 0.9, 0.9, true)
             end
             if self.healthHistory and self.healthHistory.supported then
-                GameTooltip:AddLine("During combat, above health: three seconds of HP history. Newest at the bottom; colors show health remaining. Healing hover previews cover the bottom two rows.", 0.75, 0.9, 0.9, true)
+                GameTooltip:AddLine(string.format("During combat, above health: %g seconds of HP history. Newest at the bottom; colors show health remaining. Healing hover previews cover the bottom two rows.", ns.HealthHistory and ns.HealthHistory:GetWindowSeconds() or 3), 0.75, 0.9, 0.9, true)
             end
             showTooltip(self)
         end)
@@ -598,6 +608,7 @@ function Frames:RefreshAll(refreshAuras)
             paintHealing(card)
             paintResources(card, unit)
             if ns.HealAuraDisplay then ns.HealAuraDisplay:Update(card, unit) end
+            if ns.CleanseDisplay then ns.CleanseDisplay:Update(card, unit) end
             if ns.HealthPrediction then
                 ns.HealthPrediction:Update(card, ns.worldActive ~= false and unit or nil)
             end
@@ -619,11 +630,15 @@ function Frames:RefreshAll(refreshAuras)
             if ns.HoverPrediction then ns.HoverPrediction:Clear(card) end
             if ns.HealthHistory then ns.HealthHistory:Clear(card) end
             if ns.HealAuraDisplay then ns.HealAuraDisplay:Clear(card) end
+            if ns.CleanseDisplay then ns.CleanseDisplay:Clear(card) end
         end
     end
     if self.preview and self.preview:IsShown() then
         for _, card in ipairs(self.preview.cards) do
             paintHealing(card)
+            if ns.HealthHistory and card.previewHealth then
+                ns.HealthHistory:Preview(card, card.previewHealth, card.previewHealthMax)
+            end
             ns.Visuals:SetPortraitHover(card, portraitHovered(card))
         end
     end
@@ -675,6 +690,7 @@ function Frames:ClearPredictions()
         if ns.HoverPrediction then ns.HoverPrediction:Clear(card) end
         if ns.HealthHistory then ns.HealthHistory:Clear(card) end
         if ns.HealAuraDisplay then ns.HealAuraDisplay:Clear(card) end
+        if ns.CleanseDisplay then ns.CleanseDisplay:Clear(card) end
     end
 end
 
@@ -754,6 +770,7 @@ function Frames:TogglePreview()
         if coords then card.portrait:SetTexCoord(unpack(coords)) end
         card.health:SetMinMaxValues(0, sample[4]); card.health:SetValue(sample[3])
         card.previewHealthMax = sample[4]
+        card.previewHealth = sample[3]
         if ns.HealthHistory then ns.HealthHistory:Preview(card, sample[3], sample[4], GetTime()) end
         card.health.text:SetFormattedText("%d / %d", sample[3], sample[4])
         if ns.HealthPrediction then

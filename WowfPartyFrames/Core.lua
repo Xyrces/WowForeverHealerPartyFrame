@@ -10,6 +10,7 @@ local function start()
     ns.db = ns.Profiles:Init(WowfPartyFramesDB)
     ns.Assignments:Init(ns.db)
     if ns.Spells.RefreshCache then ns.Spells:RefreshCache() end
+    if ns.Cleanses then ns.Cleanses:Init(ns.db) end
     if ns.SpellEstimates then ns.SpellEstimates:Invalidate() end
     if ns.worldSeen then ns.Assignments:BeginSession(ns.isReloadingUI) end
     ns.Rates:Initialize()
@@ -28,6 +29,11 @@ function ns.OnProfileChanged()
     ns.Frames:ApplyProfiles()
     ns.Frames:RefreshAll(true)
     ns.PresetMenus:RefreshPrompts()
+end
+
+function ns.OnCleansesChanged()
+    if ns.CleanseSettings then ns.CleanseSettings:Refresh() end
+    if ns.Frames then ns.Frames:ApplyProfiles(); ns.Frames:RefreshAll(true) end
 end
 
 local function report(ok, message)
@@ -71,6 +77,7 @@ SlashCmdList.WOWFPARTYFRAMES = function(input)
         local active = card and card.healAuraDisplay
         ns.Print("Assigned healing effects: " .. (active and active.supported and "native active markers and timers." or "unavailable."))
         if active and active.reason then ns.Print(active.reason) end
+        if ns.CleanseDisplay then ns.Print("Debuff removal: " .. ns.CleanseDisplay:GetStatus(card)) end
         if ns.Frames.pendingRoster then ns.Print("New party members will appear after combat ends.") end
     else
         ns.Print("/wpf, /wpf test, /wpf unlock, /wpf lock, /wpf reset, /wpf blizzard, /wpf status")
@@ -85,6 +92,7 @@ events:SetScript("OnEvent", function(_, event, name, second)
         start()
         if ns.started then
             ns.Assignments:BeginSession(ns.isReloadingUI)
+            if ns.Cleanses then ns.Cleanses:Refresh() end
             ns.Frames:RefreshRoster()
         end
         return
@@ -106,12 +114,14 @@ events:SetScript("OnEvent", function(_, event, name, second)
         if ns.started then
             if event == "PLAYER_REGEN_ENABLED" then ns.Frames:ClearHistory() end
             if ns.Spells.RefreshCache then ns.Spells:RefreshCache() end
+            if ns.Cleanses then ns.Cleanses:Refresh() end
             if ns.SpellEstimates then ns.SpellEstimates:Invalidate() end
             if ns.worldSeen then ns.Assignments:BeginSession(ns.isReloadingUI) end
             if ns.Frames.positionDirty then ns.Frames:SavePosition() end
             ns.Frames:RefreshRoster()
             if ns.Frames.unlocked then ns.Frames:SetUnlocked(true) end
             ns.Settings:Refresh()
+            if ns.CleanseSettings then ns.CleanseSettings:Refresh() end
         end
     elseif ns.started then
         if event == "PLAYER_REGEN_DISABLED" then
@@ -127,10 +137,12 @@ events:SetScript("OnEvent", function(_, event, name, second)
             ns.Frames:RefreshRoster()
         elseif event == "SPELLS_CHANGED" or event == "SPELL_TEXT_UPDATE" then
             if ns.Spells.RefreshCache then ns.Spells:RefreshCache() end
+            if ns.Cleanses then ns.Cleanses:Refresh() end
             -- Keep the last public minimum through combat; descriptions are
             -- reread after combat alongside the deferred profile refresh.
             if ns.SpellEstimates and not ns.InCombat() then ns.SpellEstimates:Invalidate() end
             ns.Frames:ApplyProfiles()
+            if ns.CleanseSettings then ns.CleanseSettings:Refresh() end
         elseif event == "SPELL_DATA_LOAD_RESULT" then
             if ns.SpellEstimates then ns.SpellEstimates:OnSpellDataLoadResult(name, second) end
             ns.Frames:WarmSpellEstimates()
@@ -151,8 +163,8 @@ end)
 
 events:SetScript("OnUpdate", function(_, elapsed)
     if not ns.started then return end
-    -- Sampling has its own quarter-second clock; the 0.1-second presentation
-    -- throttle must not round it up to 0.3 seconds.
+    -- Sampling has its own configurable clock; the presentation throttle
+    -- must not round the chosen interval up to a later display tick.
     ns.Frames:SampleHistory(GetTime())
     elapsedDisplay, elapsedAuras = elapsedDisplay + elapsed, elapsedAuras + elapsed
     if elapsedDisplay < 0.1 then return end
