@@ -53,6 +53,10 @@ SlashCmdList.WOWFPARTYFRAMES = function(input)
         ns.Print("v" .. ns.VERSION .. "; client " .. version .. " (" .. build .. "), interface " .. interface .. ".")
         ns.Rates:Tick()
         ns.Print("Combat rates: " .. ns.Rates.status .. "; rolling window: 5 seconds.")
+        local card = ns.Frames.cards[1]
+        local display = card and card.auraDisplay
+        ns.Print("Aura display: " .. (display and display.supported and "built-in combat renderer." or "public API fallback."))
+        if display and display.reason then ns.Print(display.reason) end
         if ns.Frames.pendingRoster then ns.Print("New party members will appear after combat ends.") end
     else
         ns.Print("/wpf, /wpf test, /wpf unlock, /wpf lock, /wpf reset, /wpf blizzard, /wpf status")

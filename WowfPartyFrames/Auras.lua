@@ -11,6 +11,14 @@ local function readableTable(value)
         and not (issecrettable and issecrettable(value))
 end
 
+-- A table can be indexable while its individual values are secret. Fixed-key
+-- reads may feed display setters; that does not make those values comparable.
+local function accessibleRecord(value)
+    if not public(value) or type(value) ~= "table" then return false end
+    if canaccesstable then return canaccesstable(value) end
+    return readableTable(value)
+end
+
 local function call(fn, ...)
     if type(fn) ~= "function" then return false, nil end
     return pcall(fn, ...)
@@ -19,9 +27,11 @@ end
 local function unitAvailable(unit)
     for _, fn in ipairs({UnitExists, UnitIsConnected, UnitIsVisible}) do
         local ok, value = call(fn, unit)
-        if not ok or not public(value) or not value then return false end
+        -- Availability hints are not permission checks. Only a readable false
+        -- proves the unit unavailable; let the aura API enforce its access.
+        if ok and public(value) and value == false then return false end
     end
-    return UnitExists ~= nil and UnitIsConnected ~= nil and UnitIsVisible ~= nil
+    return true
 end
 
 local function unrestricted()
@@ -34,7 +44,7 @@ local function unrestricted()
 end
 
 local function entryFrom(unit, aura, instanceID)
-    if not readableTable(aura) then return nil end
+    if not accessibleRecord(aura) then return nil end
     local id = instanceID
     if id == nil and public(aura.auraInstanceID) then id = aura.auraInstanceID end
     local entry = {
@@ -51,12 +61,12 @@ local function entryFrom(unit, aura, instanceID)
     return entry
 end
 
-function Auras:GetDebuffs(unit, limit)
+local function getAuras(unit, limit, filter)
     local entries, known = {}, true
     if not unitAvailable(unit) or not C_UnitAuras then return entries, false end
     limit = type(limit) == "number" and math.max(0, math.floor(limit)) or 8
     -- Enumerate all IDs before truncating so readable Weakened Soul is not lost.
-    local ok, ids = call(C_UnitAuras.GetUnitAuraInstanceIDs, unit, "HARMFUL")
+    local ok, ids = call(C_UnitAuras.GetUnitAuraInstanceIDs, unit, filter)
     if ok and readableTable(ids) then
         for _, id in ipairs(ids) do
             if public(id) and type(id) == "number" then
@@ -67,12 +77,12 @@ function Auras:GetDebuffs(unit, limit)
                 known = false
             end
         end
-    elseif unrestricted() and C_UnitAuras.GetAuraDataByIndex then
+    elseif C_UnitAuras.GetAuraDataByIndex then
         -- Older implementations may lack instance enumeration; never use a
         -- failed/secret read as the end of a known list.
         known = false
         for index = 1, 255 do
-            local got, aura = call(C_UnitAuras.GetAuraDataByIndex, unit, index, "HARMFUL")
+            local got, aura = call(C_UnitAuras.GetAuraDataByIndex, unit, index, filter)
             if not got or not public(aura) then break end
             if aura == nil then known = true; break end
             local entry = entryFrom(unit, aura)
@@ -91,13 +101,23 @@ function Auras:GetDebuffs(unit, limit)
     end)
     -- Stable insertion, retaining the instance order for every other aura.
     for index = 1, #entries do
-        if public(entries[index].spellId) and entries[index].spellId == 6788 then
+        if filter == "HARMFUL" and public(entries[index].spellId) and entries[index].spellId == 6788 then
             table.insert(entries, 1, table.remove(entries, index))
             break
         end
     end
     while #entries > limit do table.remove(entries) end
     return entries, known
+end
+
+function Auras:GetDebuffs(unit, limit)
+    return getAuras(unit, limit, "HARMFUL")
+end
+
+-- Restricted buffs can still be displayed independently of preset recast
+-- buttons. Never guess which assigned spell a secret aura represents.
+function Auras:GetHelpfulAuras(unit, limit)
+    return getAuras(unit, limit, "HELPFUL")
 end
 
 function Auras:GetAssignedBuff(unit, spellID)
@@ -118,7 +138,7 @@ function Auras:GetAssignedBuff(unit, spellID)
         local found, namedAura = call(C_UnitAuras.GetAuraDataBySpellName, unit, name, "HELPFUL")
         if not found or not public(namedAura) then return unknown end
         if namedAura == nil then return {state = "missing"} end
-        if not readableTable(namedAura) or not public(namedAura.name)
+        if not accessibleRecord(namedAura) or not public(namedAura.name)
             or namedAura.name ~= name then return unknown end
         aura = namedAura
     end
@@ -178,8 +198,10 @@ function Auras:Paint(button, unit, entry)
     set(button.count, "SetText", "")
     set(button.timer, "SetText", "")
     set(button.cooldown, "SetHideCountdownNumbers", true)
-    if not set(button.cooldown, "Clear") then set(button.cooldown, "SetCooldown", 0, 0) end
-    if not entry then return end
+    if not entry then
+        if not set(button.cooldown, "Clear") then set(button.cooldown, "SetCooldown", 0, 0) end
+        return
+    end
     set(button.icon, "SetTexture", entry.icon)
     if ns.IsSecret(entry.applicationText) or entry.applicationText ~= nil then
         set(button.count, "SetText", entry.applicationText)
@@ -197,6 +219,8 @@ function Auras:Paint(button, unit, entry)
         and type(entry.duration) == "number" and type(entry.expirationTime) == "number"
         and entry.duration > 0 then
         set(button.cooldown, "SetCooldown", entry.expirationTime - entry.duration, entry.duration)
+    else
+        if not set(button.cooldown, "Clear") then set(button.cooldown, "SetCooldown", 0, 0) end
     end
     if not nativeNumbers and public(entry.expirationTime) and type(entry.expirationTime) == "number"
         and entry.expirationTime > 0 and GetTime then

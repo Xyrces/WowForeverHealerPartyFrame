@@ -2,9 +2,9 @@ local _, ns = ...
 local Visuals = {}
 ns.Visuals = Visuals
 -- Shared by live frames and preview; no separate mockup geometry.
-ns.Layout = {width=270, height=100, pitch=110, portrait=82, portraitInner=74,
+ns.Layout = {width=270, height=120, pitch=130, portrait=82, portraitInner=74,
     portraitX=184, healSize=36, healGap=2, healInset=4, auraSize=16, auraPitch=17, auraX=44,
-    debuffY=-64, buffY=-84, barX=5, barWidth=174, rateY=-48, rateHeight=12}
+    debuffY=-64, activeBuffY=-84, buffY=-104, barX=5, barWidth=174, rateY=-48, rateHeight=12}
 local L = ns.Layout
 local MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local FONT = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
@@ -101,6 +101,8 @@ local function rateBar(card)
     card.healRate = text(bar, 2, -1, 53, 9, "LEFT")
     card.netRate = text(bar, 58, -1, 58, 9, "CENTER")
     card.damageRate = text(bar, 119, -1, 53, 9, "RIGHT")
+    card.rateUnavailable = text(bar, 2, -1, L.barWidth - 4, 9, "CENTER")
+    card.rateUnavailable:SetTextColor(0.65, 0.65, 0.65)
     card.healRate:SetTextColor(0.65, 1, 0.68)
     card.damageRate:SetTextColor(1, 0.7, 0.63)
 end
@@ -136,7 +138,10 @@ function Visuals:PaintRates(card, heal, damage, net, status)
     card.healingPerSecond, card.damagePerSecond, card.netPerSecond = nil, nil, nil
     bar.healingFill:SetAlpha(0)
     bar.damageFill:SetAlpha(0)
+    for _, label in ipairs({card.healRate, card.netRate, card.damageRate}) do label:SetAlpha(available and 1 or 0) end
+    card.rateUnavailable:SetAlpha(available and 0 or 1)
     if not available then
+        card.rateUnavailable:SetText(status == "Collecting rates" and "Collecting rates..." or "Rates unavailable")
         card.healRate:SetText("--")
         card.damageRate:SetText("--")
         card.netRate:SetText(status == "Collecting rates" and "..." or "--")
@@ -234,9 +239,13 @@ function Visuals:DecorateUnit(card)
     card.debuffLabel:SetText("Debuffs")
     card.debuffLabel:SetTextColor(0.9, 0.8, 0.72)
     card.buffLabel = text(card, L.barX, L.buffY - 4, 35, 8, "RIGHT")
-    card.buffLabel:SetText("Buffs")
+    card.buffLabel:SetText("Recast")
     card.buffLabel:SetTextColor(0.9, 0.86, 0.7)
+    card.activeBuffLabel = text(card, L.barX, L.activeBuffY - 4, 35, 8, "RIGHT")
+    card.activeBuffLabel:SetText("Buffs")
+    card.activeBuffLabel:SetTextColor(0.9, 0.86, 0.7)
     card.debuffs = {}
+    card.activeBuffs = {}
     for index = 1, 8 do
         local button = CreateFrame("Button", nil, card)
         self:DecorateSpellButton(button, L.auraSize)
@@ -246,6 +255,10 @@ function Visuals:DecorateUnit(card)
         button.rim:SetSize(L.auraSize + 3, L.auraSize + 3)
         button.rim:SetVertexColor(0.8, 0.2, 0.15)
         card.debuffs[index] = button
+        local helpful = CreateFrame("Button", nil, card)
+        self:DecorateSpellButton(helpful, L.auraSize)
+        helpful:SetPoint("TOPLEFT", L.auraX + (index - 1) * L.auraPitch, L.activeBuffY)
+        card.activeBuffs[index] = helpful
     end
     local guides = CreateFrame("Frame", nil, area)
     guides:SetAllPoints()

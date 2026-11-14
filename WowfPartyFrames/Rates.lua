@@ -47,9 +47,9 @@ end
 -- CLEU header occupies fields 1..11. Damage amounts already exclude absorbs;
 -- overkill is included, and healing amounts include overhealing.
 local function decode(event)
-    local kind, guid = event[2], event[8]
-    if secret(kind) or secret(guid) then return nil, "Combat data restricted" end
-    if type(kind) ~= "string" or type(guid) ~= "string" then return nil, "Invalid combat data" end
+    local kind = event[2]
+    if secret(kind) then return nil, "Combat data restricted" end
+    if type(kind) ~= "string" then return nil, "Invalid combat data" end
     local amountIndex, excessIndex, heal
     if kind == "SPELL_HEAL" or kind == "SPELL_PERIODIC_HEAL" then
         amountIndex, excessIndex, heal = 15, 16, true
@@ -63,6 +63,11 @@ local function decode(event)
     else
         return nil
     end
+    -- Cast starts, aura events, and other irrelevant events may have no
+    -- destination. They must not repeatedly erase a valid rolling window.
+    local guid = event[8]
+    if secret(guid) then return nil, "Combat data restricted" end
+    if type(guid) ~= "string" then return nil, "Invalid combat data" end
     local amount, excess = event[amountIndex], event[excessIndex]
     if secret(amount) or secret(excess) then return nil, "Combat data restricted" end
     if not number(amount) or not number(excess) then return nil, "Invalid combat data" end
@@ -88,7 +93,6 @@ function Rates:SetUnits(units)
 end
 
 local function capability()
-    if type(CombatLogGetCurrentEventInfo) ~= "function" then return "Combat log unavailable" end
     -- This target supplies an explicit restriction query. Without it we cannot
     -- establish permission to subscribe; never probe a restricted event blindly.
     if not C_CombatLog or type(C_CombatLog.IsCombatLogRestricted) ~= "function" then
@@ -97,12 +101,19 @@ local function capability()
     local ok, restricted = pcall(C_CombatLog.IsCombatLogRestricted)
     if not ok or secret(restricted) or type(restricted) ~= "boolean" then return "Combat log permission unknown" end
     if restricted then return "Combat data restricted" end
-    return "available"
+    -- Prefer the public namespace when a client exposes it. Forever moves
+    -- the reader to a SecureOnly API; never call C_CombatLogSecure or infer
+    -- separate incoming healing/damage from HP changes or outgoing HPS.
+    local reader = C_CombatLog.GetCurrentEventInfo
+    if type(reader) ~= "function" then reader = CombatLogGetCurrentEventInfo end
+    if type(reader) ~= "function" then return "Client does not expose incoming combat events" end
+    return "available", reader
 end
 
 function Rates:Tick()
     if not self.frame then return end
-    local status = capability()
+    local status, reader = capability()
+    self.reader = reader
     if status ~= self.status then
         self:Reset()
         self.status = status
@@ -159,7 +170,7 @@ end
 function Rates:OnCombatEvent()
     self:Tick()
     if self.status ~= "available" then return end
-    local function read() return { CombatLogGetCurrentEventInfo() } end
+    local function read() return { self.reader() } end
     local ok, event = pcall(read)
     if not ok then self.status = "Combat log unavailable"; self:Reset(); return end
     local entry, reason = decode(event)

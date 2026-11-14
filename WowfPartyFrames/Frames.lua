@@ -154,22 +154,28 @@ local function decorateControls(card, preview)
             card[kind][index] = button
         end
     end
-    for _, button in ipairs(card.debuffs) do
+    local displayButtons = {}
+    for _, button in ipairs(card.debuffs) do button.auraFilter = "HARMFUL"; displayButtons[#displayButtons + 1] = button end
+    for _, button in ipairs(card.activeBuffs) do button.auraFilter = "HELPFUL"; displayButtons[#displayButtons + 1] = button end
+    for _, button in ipairs(displayButtons) do
         button.card = card
         button:SetScript("OnEnter", function(self)
             local unit = not preview and unitOf(card)
             openTooltip(self)
-            if unit and self.auraInstanceID and GameTooltip.SetUnitDebuffByAuraInstanceID then
-                local ok = pcall(GameTooltip.SetUnitDebuffByAuraInstanceID, GameTooltip, unit, self.auraInstanceID)
-                if not ok then GameTooltip:SetText("Debuff details unavailable") end
+            local setter = self.auraFilter == "HARMFUL" and GameTooltip.SetUnitDebuffByAuraInstanceID
+                or GameTooltip.SetUnitBuffByAuraInstanceID
+            if unit and self.auraInstanceID and setter then
+                local ok = pcall(setter, GameTooltip, unit, self.auraInstanceID)
+                if not ok then GameTooltip:SetText("Aura details unavailable") end
             else
-                GameTooltip:SetText(preview and "Preview debuff" or "Debuff")
+                GameTooltip:SetText(preview and "Preview aura" or "Aura")
             end
             showTooltip(self)
         end)
         button:SetScript("OnLeave", hideTooltip)
     end
     ns.Visuals:ApplyControlStyle(card)
+    if not preview and ns.AuraDisplay then ns.AuraDisplay:Create(card) end
 end
 
 local function configureSpell(button, id)
@@ -222,7 +228,7 @@ local function applyCardProfile(card)
             end
         end
     end
-    card.buffLabel:SetText(hasBuffs and "Buffs" or "")
+    card.buffLabel:SetText(hasBuffs and "Recast" or "")
     ns.Visuals:ApplyControlStyle(card)
     paintHealing(card)
 end
@@ -474,14 +480,21 @@ local function paintRates(card, unit)
 end
 
 local function paintAuras(card, unit)
-    local entries, known = ns.Auras:GetDebuffs(unit, 8)
-    card.debuffLabel:SetText(known and "Debuffs" or "Debuffs?")
-    for index, button in ipairs(card.debuffs) do
-        local entry = entries[index]
-        button.auraInstanceID = entry and entry.auraInstanceID
-        ns.Auras:Paint(button, unit, entry)
-        -- Only these unprotected display buttons change visibility in combat.
-        button:SetShown(entry ~= nil)
+    for _, view in ipairs({{card.debuffs, card.debuffLabel, "Debuffs", "GetDebuffs"},
+        {card.activeBuffs, card.activeBuffLabel, "Buffs", "GetHelpfulAuras"}}) do
+        local entries, known = {}, card.nativeAuras
+        if not card.nativeAuras and ns.Auras[view[4]] then
+            entries, known = ns.Auras[view[4]](ns.Auras, unit, 8)
+        end
+        view[2]:SetText(view[3] .. (known and "" or "?"))
+        for index, button in ipairs(view[1]) do
+            local entry = entries[index]
+            button.auraInstanceID = entry and entry.auraInstanceID
+            ns.Auras:Paint(button, unit, entry)
+            -- Only unprotected fallback displays change visibility. Native
+            -- containers own their aura identities, icons and combat timers.
+            button:SetShown(entry ~= nil)
+        end
     end
     for _, button in ipairs(card.buffs) do
         if button.spellID then
@@ -513,6 +526,11 @@ end
 function Frames:RefreshAll(refreshAuras)
     for _, card in ipairs(self.cards) do
         local unit = unitOf(card)
+        if ns.AuraDisplay then
+            local ready = ns.AuraDisplay:Update(card, unit)
+            if card.nativeAuras ~= ready then refreshAuras = true end
+            card.nativeAuras = ready
+        end
         if unit and card:IsVisible() then
             paintHealing(card)
             paintResources(card, unit)
@@ -543,7 +561,8 @@ function Frames:SetBlizzardVisible(visible)
     if visible then
         for frame, parent in pairs(self.nativeParents) do
             frame:SetParent(parent)
-            if frame.UpdatePartyFrames then frame:UpdatePartyFrames() end
+            -- Let Blizzard's own events refresh its frames. Calling its update
+            -- method from addon code taints subsequent native secret reads.
             self.nativeParents[frame] = nil
         end
     else
@@ -606,6 +625,14 @@ function Frames:TogglePreview()
             if slot == 1 then
                 button.icon:SetTexture("Interface\\Icons\\Spell_Holy_AshesToAshes")
                 button.timer:SetText("12")
+            end
+        end
+        for slot, button in ipairs(card.activeBuffs) do
+            button:SetShown(slot <= 3)
+            if slot <= 3 then
+                button.icon:SetTexture(({"Interface\\Icons\\Spell_Holy_WordFortitude",
+                    "Interface\\Icons\\Spell_Holy_DivineSpirit", "Interface\\Icons\\Spell_Shadow_AntiShadow"})[slot])
+                button.timer:SetText(slot == 1 and "18m" or "12m")
             end
         end
         ns.Visuals:SetPortraitHover(card, false)
