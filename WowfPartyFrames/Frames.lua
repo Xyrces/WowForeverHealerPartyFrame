@@ -34,7 +34,20 @@ local function colorFor(class)
     return RAID_CLASS_COLORS and RAID_CLASS_COLORS[class] or {r=0.9, g=0.85, b=0.7}
 end
 
-local function hideTooltip() Frames.tooltipButton = nil; GameTooltip:Hide() end
+local function hideTooltip()
+    local button = Frames.tooltipButton
+    if button and ns.HoverPrediction then ns.HoverPrediction:Clear(button.card) end
+    Frames.tooltipButton = nil
+    GameTooltip:Hide()
+end
+
+local function updateHover(button)
+    if not ns.HoverPrediction or not button or button.kind ~= "heals" then return end
+    local card = button.card
+    if not card:IsVisible() or ns.worldActive == false then ns.HoverPrediction:Clear(card); return end
+    ns.HoverPrediction:Update(button, not button.preview and unitOf(card) or nil,
+        button.preview and card.previewHealthMax or nil)
+end
 
 local function openTooltip(button)
     GameTooltip:SetOwner(button, "ANCHOR_NONE")
@@ -75,6 +88,21 @@ local function spellTooltip(button)
         GameTooltip:SetSpellByID(button.spellID)
         if button.kind == "heals" then
             GameTooltip:AddLine(ns.QUADRANTS[button.index] .. " | " .. (LAYER_NAMES[button.activeLayer] or "Base"), 1, 0.82, 0)
+            local estimate = ns.SpellEstimates and ns.SpellEstimates:Get(button.spellID)
+            if estimate then
+                if estimate.direct > 0 then
+                    GameTooltip:AddLine(string.format("Minimum healing: %d", estimate.direct), 0.6, 1, 0.7)
+                end
+                if estimate.hot > 0 then
+                    GameTooltip:AddLine(string.format("Over time: %d over %d sec", estimate.hot, estimate.duration or 0), 0.6, 1, 0.7)
+                end
+                if estimate.absorb > 0 then
+                    GameTooltip:AddLine(string.format("Shield capacity: %d", estimate.absorb), 0.7, 0.85, 1)
+                end
+            end
+            if button.card.healAuraDisplay and button.card.healAuraDisplay.supported then
+                GameTooltip:AddLine("Green check and timer: this effect is already active. Click to refresh if needed.", 0.75, 0.85, 0.75, true)
+            end
         else
             local state = button.buffState
             local note = state == "native" and "Click to refresh or reapply to this member."
@@ -93,6 +121,7 @@ local function spellTooltip(button)
     if button.kind == "heals" and not button.spellID then
         GameTooltip:AddLine((LAYER_NAMES[button.activeLayer] or "Base") .. ": no action on click.", 1, 0.82, 0)
     end
+    updateHover(button)
     showTooltip(button)
 end
 
@@ -120,6 +149,7 @@ end
 local function decorateControls(card, preview)
     ns.Visuals:DecorateUnit(card)
     if ns.HealthPrediction then ns.HealthPrediction:Create(card) end
+    if ns.HoverPrediction then ns.HoverPrediction:Create(card) end
     card.heals, card.buffs = {}, {}
     for _, kind in ipairs({"heals", "buffs"}) do
         for index = 1, kind == "heals" and 4 or ns.MAX_BUFFS do
@@ -147,6 +177,7 @@ local function decorateControls(card, preview)
                 button:SetPoint("TOPLEFT", L.auraX + (index - 1) * L.auraPitch, L.buffY)
             end
             button:SetScript("OnEnter", function(self)
+                hideTooltip()
                 paintHealing(card)
                 Frames.tooltipButton = self
                 spellTooltip(self)
@@ -177,6 +208,12 @@ local function decorateControls(card, preview)
     end
     ns.Visuals:ApplyControlStyle(card)
     if not preview and ns.AuraDisplay then ns.AuraDisplay:Create(card) end
+    if not preview and ns.HealAuraDisplay then ns.HealAuraDisplay:Create(card) end
+    card:HookScript("OnHide", function(self)
+        if Frames.tooltipButton and Frames.tooltipButton.card == self then hideTooltip() end
+        if ns.HoverPrediction then ns.HoverPrediction:Clear(self) end
+        if ns.HealAuraDisplay then ns.HealAuraDisplay:Clear(self) end
+    end)
 end
 
 local function configureSpell(button, id)
@@ -185,6 +222,7 @@ local function configureSpell(button, id)
         for _, layer in ipairs(LAYERS) do
             local spellID = ns.Profiles:GetSpell(button.card.presetID, "heals", button.index, layer[1])
             button.layerSpells[layer[1]] = spellID
+            if spellID and ns.SpellEstimates then ns.SpellEstimates:Get(spellID) end
             if not button.preview then
                 -- Each exact modifier combination has an explicit action;
                 -- an empty slot must never fall back to another rank/layer.
@@ -238,6 +276,7 @@ local function applyCardProfile(card)
     local preset = ns.Profiles:GetPreset(card.presetID)
     card.presetLabel:SetText("Preset: " .. (preset and preset.name or "Default"))
     if not card.previewIndex and ns.AuraDisplay then ns.AuraDisplay:ConfigureBuffs(card) end
+    if not card.previewIndex and ns.HealAuraDisplay then ns.HealAuraDisplay:Configure(card) end
     ns.Visuals:ApplyControlStyle(card)
     paintHealing(card)
 end
@@ -250,6 +289,20 @@ function Frames:ApplyProfiles()
     end
     self.pendingProfiles = false
     return true
+end
+
+function Frames:WarmSpellEstimates()
+    if ns.InCombat() or not ns.SpellEstimates then return end
+    local function warm(cards)
+        for _, card in ipairs(cards or {}) do
+            for _, button in ipairs(card.heals or {}) do
+                for _, id in pairs(button.layerSpells or {}) do ns.SpellEstimates:Get(id) end
+            end
+        end
+    end
+    warm(self.cards)
+    warm(self.preview and self.preview.cards)
+    if self.tooltipButton then spellTooltip(self.tooltipButton) end
 end
 
 function Frames:Create()
@@ -536,9 +589,10 @@ function Frames:RefreshAll(refreshAuras)
             if card.nativeAuras ~= ready then refreshAuras = true end
             card.nativeAuras = ready
         end
-        if unit and card:IsVisible() then
+        if unit and card:IsVisible() and ns.worldActive ~= false then
             paintHealing(card)
             paintResources(card, unit)
+            if ns.HealAuraDisplay then ns.HealAuraDisplay:Update(card, unit) end
             if ns.HealthPrediction then
                 ns.HealthPrediction:Update(card, ns.worldActive ~= false and unit or nil)
             end
@@ -554,8 +608,11 @@ function Frames:RefreshAll(refreshAuras)
             end
             if refreshAuras then paintAuras(card, unit) end
             ns.Visuals:SetPortraitHover(card, portraitHovered(card))
-        elseif ns.HealthPrediction then
-            ns.HealthPrediction:Clear(card)
+        else
+            if Frames.tooltipButton and Frames.tooltipButton.card == card then hideTooltip() end
+            if ns.HealthPrediction then ns.HealthPrediction:Clear(card) end
+            if ns.HoverPrediction then ns.HoverPrediction:Clear(card) end
+            if ns.HealAuraDisplay then ns.HealAuraDisplay:Clear(card) end
         end
     end
     if self.preview and self.preview:IsShown() then
@@ -564,10 +621,10 @@ function Frames:RefreshAll(refreshAuras)
             ns.Visuals:SetPortraitHover(card, portraitHovered(card))
         end
     end
+    if self.tooltipButton then updateHover(self.tooltipButton) end
 end
 
 function Frames:RefreshPredictions(changedUnit)
-    if not ns.HealthPrediction then return end
     if changedUnit ~= nil and (not public(changedUnit, "string") or not changedUnit:match("^party[1-4]$")) then return end
     for _, card in ipairs(self.cards) do
         local unit = unitOf(card)
@@ -576,17 +633,23 @@ function Frames:RefreshPredictions(changedUnit)
                 -- Health changes move the native fill edge that prediction
                 -- bars follow; update both together without reading its size.
                 paintResources(card, unit)
-                ns.HealthPrediction:Update(card, unit)
+                if ns.HealthPrediction then ns.HealthPrediction:Update(card, unit) end
+                if self.tooltipButton and self.tooltipButton.card == card then updateHover(self.tooltipButton) end
             else
-                ns.HealthPrediction:Clear(card)
+                if ns.HealthPrediction then ns.HealthPrediction:Clear(card) end
+                if ns.HoverPrediction then ns.HoverPrediction:Clear(card) end
             end
         end
     end
 end
 
 function Frames:ClearPredictions()
-    if not ns.HealthPrediction then return end
-    for _, card in ipairs(self.cards) do ns.HealthPrediction:Clear(card) end
+    hideTooltip()
+    for _, card in ipairs(self.cards) do
+        if ns.HealthPrediction then ns.HealthPrediction:Clear(card) end
+        if ns.HoverPrediction then ns.HoverPrediction:Clear(card) end
+        if ns.HealAuraDisplay then ns.HealAuraDisplay:Clear(card) end
+    end
 end
 
 function Frames:RefreshMemberInfo()
@@ -664,6 +727,7 @@ function Frames:TogglePreview()
         local coords = CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[sample[2]]
         if coords then card.portrait:SetTexCoord(unpack(coords)) end
         card.health:SetMinMaxValues(0, sample[4]); card.health:SetValue(sample[3])
+        card.previewHealthMax = sample[4]
         card.health.text:SetFormattedText("%d / %d", sample[3], sample[4])
         if ns.HealthPrediction then
             ns.HealthPrediction:Preview(card, {health=sample[3], healthMax=sample[4],

@@ -251,4 +251,7 @@ function Visuals:SetPortraitHover(card, show)
         button.border:SetAlpha(show and not round and 1 or 0)
     end
     for _, divider in ipairs(card.portraitDividers or {}) do divider:SetAlpha(round and alpha or 0) end
+    if ns.HealAuraDisplay then
+        ns.HealAuraDisplay:SetVisible(card, card.heals and card.heals[1] and card.heals[1].activeLayer, show)
+    end
 end

@@ -10,6 +10,7 @@ local function start()
     ns.db = ns.Profiles:Init(WowfPartyFramesDB)
     ns.Assignments:Init(ns.db)
     if ns.Spells.RefreshCache then ns.Spells:RefreshCache() end
+    if ns.SpellEstimates then ns.SpellEstimates:Invalidate() end
     if ns.worldSeen then ns.Assignments:BeginSession(ns.isReloadingUI) end
     ns.Rates:Initialize()
     if not ns.Frames:Create() then return end
@@ -64,6 +65,11 @@ SlashCmdList.WOWFPARTYFRAMES = function(input)
         ns.Print("Health indicators: " .. (prediction and prediction.supported
             and "native incoming heals, shields, and healing absorption." or "unavailable."))
         if prediction and prediction.reason then ns.Print(prediction.reason) end
+        local hover = card and card.hoverPrediction
+        ns.Print("Spell hover preview: " .. (hover and hover.supported and "minimum spell values; 2-pixel strip." or "unavailable."))
+        local active = card and card.healAuraDisplay
+        ns.Print("Assigned healing effects: " .. (active and active.supported and "native active markers and timers." or "unavailable."))
+        if active and active.reason then ns.Print(active.reason) end
         if ns.Frames.pendingRoster then ns.Print("New party members will appear after combat ends.") end
     else
         ns.Print("/wpf, /wpf test, /wpf unlock, /wpf lock, /wpf reset, /wpf blizzard, /wpf status")
@@ -98,6 +104,7 @@ events:SetScript("OnEvent", function(_, event, name, second)
         start()
         if ns.started then
             if ns.Spells.RefreshCache then ns.Spells:RefreshCache() end
+            if ns.SpellEstimates then ns.SpellEstimates:Invalidate() end
             if ns.worldSeen then ns.Assignments:BeginSession(ns.isReloadingUI) end
             if ns.Frames.positionDirty then ns.Frames:SavePosition() end
             ns.Frames:RefreshRoster()
@@ -116,7 +123,16 @@ events:SetScript("OnEvent", function(_, event, name, second)
             ns.Frames:RefreshRoster()
         elseif event == "SPELLS_CHANGED" or event == "SPELL_TEXT_UPDATE" then
             if ns.Spells.RefreshCache then ns.Spells:RefreshCache() end
+            -- Keep the last public minimum through combat; descriptions are
+            -- reread after combat alongside the deferred profile refresh.
+            if ns.SpellEstimates and not ns.InCombat() then ns.SpellEstimates:Invalidate() end
             ns.Frames:ApplyProfiles()
+        elseif event == "SPELL_DATA_LOAD_RESULT" then
+            if ns.SpellEstimates then ns.SpellEstimates:OnSpellDataLoadResult(name, second) end
+            ns.Frames:WarmSpellEstimates()
+        elseif event == "PLAYER_EQUIPMENT_CHANGED" then
+            if ns.SpellEstimates and not ns.InCombat() then ns.SpellEstimates:Invalidate() end
+            ns.Frames:WarmSpellEstimates()
         elseif event == "MODIFIER_STATE_CHANGED" then
             -- Secure actions are already configured; only icons/tooltips change.
             ns.Frames:RefreshAll(false)
@@ -141,7 +157,7 @@ events:SetScript("OnUpdate", function(_, elapsed)
 end)
 
 for _, event in ipairs({"ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "PLAYER_LEAVING_WORLD", "PLAYER_REGEN_ENABLED",
-    "PLAYER_REGEN_DISABLED", "GROUP_ROSTER_UPDATE", "UNIT_NAME_UPDATE", "UNIT_AURA", "SPELLS_CHANGED", "SPELL_TEXT_UPDATE", "MODIFIER_STATE_CHANGED", "RAID_TARGET_UPDATE"}) do
+    "PLAYER_REGEN_DISABLED", "GROUP_ROSTER_UPDATE", "UNIT_NAME_UPDATE", "UNIT_AURA", "SPELLS_CHANGED", "SPELL_TEXT_UPDATE", "SPELL_DATA_LOAD_RESULT", "PLAYER_EQUIPMENT_CHANGED", "MODIFIER_STATE_CHANGED", "RAID_TARGET_UPDATE"}) do
     events:RegisterEvent(event)
 end
 for event in pairs(predictionEvents) do events:RegisterEvent(event) end
