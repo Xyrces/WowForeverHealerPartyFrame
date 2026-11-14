@@ -4,6 +4,9 @@ ns.Frames = Frames
 local QUESTION = "Interface\\Icons\\INV_Misc_QuestionMark"
 local EMPTY_NAME = "__WOWF_NO_MEMBER__"
 local L = ns.Layout
+local LAYERS = { {"base", "", "Base"}, {"shift", "shift-", "Shift"},
+    {"ctrl", "ctrl-", "Ctrl"}, {"ctrlshift", "ctrl-shift-", "Shift+Ctrl"} }
+local LAYER_NAMES = {base="Base", shift="Shift", ctrl="Ctrl", ctrlshift="Shift+Ctrl", alt="Alt (unused)"}
 
 local function public(value, kind)
     return not ns.IsSecret(value) and (not kind or type(value) == kind)
@@ -31,14 +34,47 @@ local function colorFor(class)
     return RAID_CLASS_COLORS and RAID_CLASS_COLORS[class] or {r=0.9, g=0.85, b=0.7}
 end
 
-local function hideTooltip() GameTooltip:Hide() end
+local function hideTooltip() Frames.tooltipButton = nil; GameTooltip:Hide() end
+
+local function openTooltip(button)
+    GameTooltip:SetOwner(button, "ANCHOR_NONE")
+end
+
+local function showTooltip(button)
+    GameTooltip:Show()
+    GameTooltip:ClearAllPoints()
+    local card = button.card or button
+    local right = Frames.anchor and Frames.anchor:GetRight()
+    local scale = Frames.anchor and Frames.anchor:GetEffectiveScale() or 1
+    local fitsRight = not right or right * scale + (GameTooltip:GetWidth() + 16) * GameTooltip:GetEffectiveScale()
+        <= UIParent:GetWidth() * UIParent:GetEffectiveScale()
+    if fitsRight then
+        GameTooltip:SetPoint("TOPLEFT", card, "TOPRIGHT", 12, 0)
+    else
+        GameTooltip:SetPoint("TOPRIGHT", card, "TOPLEFT", -12, 0)
+    end
+end
+
+local function activeLayer(card)
+    local function down(fn)
+        local value = fn and fn()
+        return public(value, "boolean") and value
+    end
+    if down(IsAltKeyDown) then return "alt" end
+    local shift, ctrl = down(IsShiftKeyDown), down(IsControlKeyDown)
+    if ctrl and shift then return "ctrlshift" end
+    if ctrl then return "ctrl" end
+    if shift then return "shift" end
+    if card.previewIndex and ns.Settings then return ns.Settings.healLayer or "base" end
+    return "base"
+end
 
 local function spellTooltip(button)
-    GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+    openTooltip(button)
     if button.spellID then
         GameTooltip:SetSpellByID(button.spellID)
         if button.kind == "heals" then
-            GameTooltip:AddLine(ns.QUADRANTS[button.index] .. ": click to heal this member.", 1, 0.82, 0, true)
+            GameTooltip:AddLine(ns.QUADRANTS[button.index] .. " | " .. (LAYER_NAMES[button.activeLayer] or "Base"), 1, 0.82, 0)
         else
             local state = button.buffState
             local note = state == "missing" and "Missing - click to reapply to this member."
@@ -53,7 +89,31 @@ local function spellTooltip(button)
     local preset = ns.Profiles:GetPreset(button.card.presetID)
     GameTooltip:AddLine("Preset: " .. (preset and preset.name or "Default"), 1, 0.82, 0)
     if button.preview then GameTooltip:AddLine("Preview only: no spells will be cast.", 1, 0.5, 0.25, true) end
-    GameTooltip:Show()
+    if button.kind == "heals" and not button.spellID then
+        GameTooltip:AddLine((LAYER_NAMES[button.activeLayer] or "Base") .. ": no action on click.", 1, 0.82, 0)
+    end
+    showTooltip(button)
+end
+
+local function paintSpell(button, id)
+    local spell = id and ns.Spells:Get(id)
+    button.spellID = id
+    button.icon:SetTexture(spell and spell.icon or QUESTION)
+    button.icon:SetDesaturated(false)
+    local rankNumber = spell and spell.rank and spell.rank:match("%d+")
+    button.rank:SetText(button.kind == "heals" and rankNumber and ("R" .. rankNumber) or "")
+end
+
+local function paintHealing(card)
+    local layer = activeLayer(card)
+    for _, button in ipairs(card.heals) do
+        local id = button.layerSpells and button.layerSpells[layer]
+        if button.activeLayer ~= layer or button.spellID ~= id then
+            button.activeLayer = layer
+            paintSpell(button, id)
+            if Frames.tooltipButton == button then spellTooltip(button) end
+        end
+    end
 end
 
 local function decorateControls(card, preview)
@@ -76,55 +136,71 @@ local function decorateControls(card, preview)
                 button:SetAttribute("*type2", "togglemenu")
             end
             if kind == "heals" then
-                local x = (index - 1) % 2 * L.healSize + L.healInset
-                local y = -L.healInset - math.floor((index - 1) / 2) * L.healSize
+                local x = (index - 1) % 2 * (L.healSize + L.healGap) + L.healInset
+                local y = -L.healInset - math.floor((index - 1) / 2) * (L.healSize + L.healGap)
                 button:SetPoint("TOPLEFT", card.portraitArea, "TOPLEFT", x, y)
                 button:SetFrameLevel(card.portraitArea:GetFrameLevel() + 2)
                 button.border:SetAlpha(0)
-                if index > 2 then
-                    -- Keep bottom-quadrant ranks inside the circular portrait.
-                    button.rank:ClearAllPoints()
-                    button.rank:SetPoint("TOPLEFT", 0, -1)
-                end
             else
                 button:SetPoint("TOPLEFT", L.auraX + (index - 1) * L.auraPitch, L.buffY)
             end
-            button:SetScript("OnEnter", function(self) spellTooltip(self) end)
+            button:SetScript("OnEnter", function(self)
+                paintHealing(card)
+                Frames.tooltipButton = self
+                spellTooltip(self)
+                ns.Visuals:SetPortraitHover(card, kind == "heals" or portraitHovered(card))
+            end)
             button:SetScript("OnLeave", hideTooltip)
             card[kind][index] = button
         end
     end
     for _, button in ipairs(card.debuffs) do
+        button.card = card
         button:SetScript("OnEnter", function(self)
             local unit = not preview and unitOf(card)
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            openTooltip(self)
             if unit and self.auraInstanceID and GameTooltip.SetUnitDebuffByAuraInstanceID then
                 local ok = pcall(GameTooltip.SetUnitDebuffByAuraInstanceID, GameTooltip, unit, self.auraInstanceID)
                 if not ok then GameTooltip:SetText("Debuff details unavailable") end
             else
                 GameTooltip:SetText(preview and "Preview debuff" or "Debuff")
             end
-            GameTooltip:Show()
+            showTooltip(self)
         end)
         button:SetScript("OnLeave", hideTooltip)
     end
-    ns.Visuals:SetPortraitHover(card, false)
+    ns.Visuals:ApplyControlStyle(card)
 end
 
 local function configureSpell(button, id)
-    local spell = id and ns.Spells:Get(id)
-    button.spellID = id
+    if button.kind == "heals" then
+        button.layerSpells = {}
+        for _, layer in ipairs(LAYERS) do
+            local spellID = ns.Profiles:GetSpell(button.card.presetID, "heals", button.index, layer[1])
+            button.layerSpells[layer[1]] = spellID
+            if not button.preview then
+                -- Each exact modifier combination has an explicit action;
+                -- an empty slot must never fall back to another rank/layer.
+                button:SetAttribute(layer[2] .. "type1", spellID and "spell" or "")
+                button:SetAttribute(layer[2] .. "spell1", spellID)
+                button:SetAttribute("alt-" .. layer[2] .. "type1", "")
+                button:SetAttribute("alt-" .. layer[2] .. "spell1", nil)
+            end
+        end
+        if not button.preview then
+            button:SetAttribute("spell", nil)
+            button:SetAttribute("*type1", nil)
+        end
+        button.activeLayer = nil
+        return
+    end
+    paintSpell(button, id)
     if not button.preview then
         -- Numeric spell IDs preserve the precise dragged rank.
         button:SetAttribute("spell", id)
         button:SetAttribute("type1", id and "spell" or "target")
         button:SetAttribute("*type1", id and "spell" or "target")
     end
-    button.icon:SetTexture(spell and spell.icon or QUESTION)
-    button.icon:SetDesaturated(false)
-    local rank = spell and spell.rank or ""
-    local rankNumber = rank:match("%d+")
-    button.rank:SetText(button.kind == "heals" and rankNumber and ("R" .. rankNumber) or "")
     if button.kind == "buffs" then button:SetShown(id ~= nil) end
 end
 
@@ -147,6 +223,8 @@ local function applyCardProfile(card)
         end
     end
     card.buffLabel:SetText(hasBuffs and "Buffs" or "")
+    ns.Visuals:ApplyControlStyle(card)
+    paintHealing(card)
 end
 
 function Frames:ApplyProfiles()
@@ -205,9 +283,11 @@ function Frames:Create()
         card:RegisterForClicks("AnyUp")
         card:SetAttribute("type1", "target")
         card:SetAttribute("type2", "togglemenu")
+        card:SetAttribute("*type1", "target")
+        card:SetAttribute("*type2", "togglemenu")
         decorateControls(card, false)
         card:SetScript("OnEnter", function(self)
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            openTooltip(self)
             GameTooltip:SetText(self.memberName or "Party member")
             local preset = ns.Profiles:GetPreset(self.presetID)
             GameTooltip:AddLine("Preset: " .. (preset and preset.name or "Default"), 1, 0.82, 0)
@@ -220,7 +300,7 @@ function Frames:Create()
             if self.rateStatus and self.rateStatus ~= "available" then
                 GameTooltip:AddLine(self.rateStatus, 1, 0.65, 0.3, true)
             end
-            GameTooltip:Show()
+            showTooltip(self)
         end)
         card:SetScript("OnLeave", hideTooltip)
         self.headers[index], self.cards[index] = header, card
@@ -434,6 +514,7 @@ function Frames:RefreshAll(refreshAuras)
     for _, card in ipairs(self.cards) do
         local unit = unitOf(card)
         if unit and card:IsVisible() then
+            paintHealing(card)
             paintResources(card, unit)
             paintRates(card, unit)
             if refreshAuras then paintAuras(card, unit) end
@@ -442,6 +523,7 @@ function Frames:RefreshAll(refreshAuras)
     end
     if self.preview and self.preview:IsShown() then
         for _, card in ipairs(self.preview.cards) do
+            paintHealing(card)
             ns.Visuals:SetPortraitHover(card, portraitHovered(card))
         end
     end
@@ -490,7 +572,7 @@ function Frames:TogglePreview()
     self.preview = preview
     preview:SetAllPoints(self.anchor)
     local title = preview:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    title:SetPoint("TOPLEFT", preview, "BOTTOMLEFT", 50, -7)
+    title:SetPoint("TOPLEFT", preview, "BOTTOMLEFT", L.barX, -7)
     title:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 9, "OUTLINE")
     title:SetText("Preview  |  /wpf test to close")
     preview.cards = {}

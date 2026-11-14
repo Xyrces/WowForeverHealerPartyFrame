@@ -11,6 +11,7 @@ local function start()
     ns.Rates:Initialize()
     if not ns.Frames:Create() then return end
     ns.Settings:Create()
+    ns.Minimap:Initialize()
     ns.PresetMenus:Initialize()
     ns.started = true
     ns.Frames:SetBlizzardVisible(ns.db.showBlizzard == true)
@@ -103,6 +104,9 @@ events:SetScript("OnEvent", function(_, event, name, second)
             ns.Frames:RefreshRoster()
         elseif event == "SPELLS_CHANGED" or event == "SPELL_TEXT_UPDATE" then
             ns.Frames:ApplyProfiles()
+        elseif event == "MODIFIER_STATE_CHANGED" then
+            -- Secure actions are already configured; only icons/tooltips change.
+            ns.Frames:RefreshAll(false)
         end
         elapsedAuras = 1
     end
@@ -120,6 +124,6 @@ events:SetScript("OnUpdate", function(_, elapsed)
 end)
 
 for _, event in ipairs({"ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "PLAYER_LEAVING_WORLD", "PLAYER_REGEN_ENABLED",
-    "PLAYER_REGEN_DISABLED", "GROUP_ROSTER_UPDATE", "UNIT_NAME_UPDATE", "UNIT_AURA", "SPELLS_CHANGED", "SPELL_TEXT_UPDATE"}) do
+    "PLAYER_REGEN_DISABLED", "GROUP_ROSTER_UPDATE", "UNIT_NAME_UPDATE", "UNIT_AURA", "SPELLS_CHANGED", "SPELL_TEXT_UPDATE", "MODIFIER_STATE_CHANGED"}) do
     events:RegisterEvent(event)
 end

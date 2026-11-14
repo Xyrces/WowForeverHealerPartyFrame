@@ -2,14 +2,14 @@
 
 Vanilla-style party portraits and attached bars, with numerical health/resources, incoming healing and damage rates, visible debuffs, and named healing and buff presets.
 
-Version **0.3.1** targets **WoW Forever 1.60.1.70862**, interface **16001**. This fixes the preset dropdown startup error that prevented `/wpf` from opening in 0.3.0. Named presets replace automatic class assignments and are assigned through each member's native right-click menu. Existing nonempty class configurations migrate to named presets with their exact spells intact. Offline integration tests reproduce the logged failure and pass with the fix; in-game confirmation is pending. The [in-game checklist](tests/IN_GAME_CHECKLIST.md) covers the checks still needed.
+Version **0.4.0** targets **WoW Forever 1.60.1.70862**, interface **16001**. Portraits and healing controls now sit on the right of the bars. Choose full square buttons or circular portrait quadrants, with independent Base, Shift, Ctrl, and Shift+Ctrl assignments. Settings also open from the minimap's native AddOns menu. Existing presets and exact spell ranks migrate to Base without being changed. Offline tests and layout renders pass; in-game confirmation is pending. The [in-game checklist](tests/IN_GAME_CHECKLIST.md) covers the checks still needed.
 
-The frames float directly over the game with no enclosing window, border, or background. Compact circular portraits, attached native bar trim, and aura rows retain the vanilla party-frame shape. Version 0.2.1 reduces portrait diameter from 84 to 54 UI units, bar width from 190 to 110, and row spacing from 124 to 90. Text is sized separately to remain readable, and the bar trim is no longer stretched to twice its native height. The solo preview uses the same size, spacing, and saved position as the live frames. Settings remain a separate panel.
+The frames float directly over the game with no enclosing window, border, or background. The existing bar style, colors, and status-bar texture are retained. The silver trim uses the larger native player-frame artwork, with mirrored endcaps and a stretched straight center. Portraits are 82 UI units, healing buttons 36×36, bars 174 units wide, and rows 110 units apart. Aura rows fit below the bars without overlapping the healing controls. The solo preview uses the same geometry and saved position as the live frames. Settings remain a separate panel.
 
 ## Install
 
 1. Close WoW or return to character selection.
-2. Extract `dist/WowfPartyFrames-0.3.1.zip` into your Forever client's `Interface/AddOns` folder. The resulting path should be `Interface/AddOns/WowfPartyFrames/WowfPartyFrames.toc`, with no extra nested folder.
+2. Extract `dist/WowfPartyFrames-0.4.0.zip` into your Forever client's `Interface/AddOns` folder. The resulting path should be `Interface/AddOns/WowfPartyFrames/WowfPartyFrames.toc`, with no extra nested folder.
 3. Enable **WoW Forever Party Frames** in the character-selection AddOns list and log in.
 4. Enter `/wpf settings` to assign spells, or `/wpf test` while solo to inspect the noncasting preview. For an already-enabled installation updated on disk, enter `/reload` yourself to load the new files.
 
@@ -17,9 +17,11 @@ Install into your own WoW Forever client's `Interface/AddOns` folder. Creating t
 
 ## Set up spells
 
-Select a **preset** from the dropdown, drag healing spells into the four portrait-quadrant slots, then drag buffs into the buff slots. The dropdown includes **New**, **Duplicate**, **Rename**, and **Delete** actions, a checkmark for the selection, and pages for longer lists. Name presets freely, such as Tank, Melee, or Caster. **Default** is always available and editable; it cannot be renamed or deleted. Fresh presets contain no assigned spells.
+Open **WoW Forever Party Frames** in the minimap's **AddOns** menu, or enter `/wpf`. Select a **preset**, select **Base**, **Shift**, **Ctrl**, or **Shift+Ctrl**, and drag spells into its four healing slots. Buffs are shared across those layers. The dropdown includes **New**, **Duplicate**, **Rename**, and **Delete** actions, a checkmark for the selection, and pages for longer lists. Name presets freely, such as Tank, Melee, or Caster. **Default** is always available and editable; it cannot be renamed or deleted. Fresh presets contain no assigned spells.
 
 Use the exact rank you want from your spellbook: the addon saves that spell's ID instead of upgrading it to your highest rank. Different quadrants can contain different ranks of the same ability. Right-click a settings slot to clear it. Assignments save immediately and persist between sessions. Edits are locked during combat.
+
+Under **Portrait controls**, choose **Buttons** for four full square icons on hover, or **Quadrants** to keep them inside the circular portrait. Both modes use the same sixteen assignments and positions. This display preference is saved and changes outside combat. The settings layer selects what you edit and what the solo preview demonstrates; live frames follow the modifier keys you hold.
 
 Right-click a party member's frame, portrait healing quadrant, or buff button and choose **Assign preset**. The native menu retains its normal party actions, and the active preset is checked. The current preset also appears in the frame/spell tooltip; no permanent preset controls are added to the frames. Editing a preset updates everyone using it. Deleting one returns affected members to Default.
 
@@ -28,7 +30,7 @@ New party members receive Default. If you previously assigned another preset to 
 ## Use the frames
 
 - **Portraits and bars:** four floating party-member frames replace the native party frames, with class-colored names and numerical current/maximum health and resources. Their starting position follows the native party frame position; a custom position is preserved.
-- **Healing:** hover over a portrait to reveal four healing quadrants. Click a configured quadrant to cast its spell directly on that member without changing your current target.
+- **Healing:** hover over a portrait to reveal four healing buttons. Hold Shift, Ctrl, or both to select another group of four; the icons, ranks, and open tooltip update immediately. Click a configured button to cast that exact rank directly on the member without changing your current target. Empty slots do nothing, including an empty Base slot; Alt combinations also do nothing on healing controls. Left-click the name or bars to target normally. Spell tooltips open outside the party stack.
 - **Buffs:** each member displays the buffs in their assigned preset. Missing buffs glow and show a `+` for reapplication. Left-click casts the assigned spell directly on that member without changing your selected target; right-click opens their native menu, including preset assignment. Active buffs remain clickable for an early refresh. Another rank of the same buff can count as present; reapplication still uses your assigned rank.
 - **Debuffs:** harmful effects remain visible without targeting the member. Readable Weakened Soul is prioritized. Timers and stacks appear when the client makes them available.
 - **Rates:** a two-sided bar matches the health and resource bars' width. Green healing fills from the left and red damage from the right; their relative shares determine where they meet. The numbers stay fixed: healing on the left, signed net in the center, damage on the right, all per second over a trailing five-second window. For example, `50/s | +5/s | 45/s` means healing exceeded damage by five health per second. Dark fills and outlined text keep the values readable. Larger values use compact notation such as `12.5k/s`; hovering the unit frame shows the rates without abbreviation. Healing excludes overhealing; damage excludes overkill and absorbed damage.
@@ -36,6 +38,8 @@ New party members receive Default. If you previously assigned another preset to 
 Rates show dashes while collecting a fresh window or when the client restricts the data; the center shows `...` during collection. Both fills clear when rates are unavailable or both rates are zero. An available zero still displays `0/s`, distinct from missing data. Unknown buff state is not treated as proof a buff is missing. These displays depend on the information the Forever client permits addons to read.
 
 Existing member assignments stay attached to their names when the party order changes during combat. New members arriving during combat are configured after combat ends.
+
+Modifier actions are configured through the client's secure click buttons before combat. No global keyboard bindings are installed or changed. Self/focus/mouseover-cast modifiers cannot redirect these buttons away from their party member; right-click still opens that member's native menu with any modifier. Buff clicks retain their existing behavior across modifiers. Other click-casting addons should not register or modify these same buttons; overlapping addons cannot be guaranteed to coexist.
 
 ## Commands
 

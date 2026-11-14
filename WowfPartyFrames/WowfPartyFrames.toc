@@ -2,7 +2,7 @@
 ## Title: WoW Forever Party Frames
 ## Notes: Vanilla portraits, numerical resources, healing and buff presets.
 ## Author: jtn50
-## Version: 0.3.1
+## Version: 0.4.0
 ## SavedVariables: WowfPartyFramesDB
 
 Bootstrap.lua
@@ -15,4 +15,5 @@ FrameVisuals.lua
 Frames.lua
 Settings.lua
 PresetMenus.lua
+Minimap.lua
 Core.lua

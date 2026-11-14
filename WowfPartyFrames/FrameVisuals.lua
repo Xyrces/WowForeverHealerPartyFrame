@@ -2,14 +2,13 @@ local _, ns = ...
 local Visuals = {}
 ns.Visuals = Visuals
 -- Shared by live frames and preview; no separate mockup geometry.
-ns.Layout = {width=224, height=84, pitch=90, portrait=54, portraitInner=46,
-    healSize=23, healInset=4, auraSize=16, auraPitch=17, auraX=88,
-    debuffY=-50, buffY=-68, barX=57, barWidth=110, rateY=-38, rateHeight=10}
+ns.Layout = {width=270, height=100, pitch=110, portrait=82, portraitInner=74,
+    portraitX=184, healSize=36, healGap=2, healInset=4, auraSize=16, auraPitch=17, auraX=44,
+    debuffY=-64, buffY=-84, barX=5, barWidth=174, rateY=-48, rateHeight=12}
 local L = ns.Layout
 local MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local FONT = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
 local PORTRAIT_ART = "Interface\\CharacterFrame\\UI-Player-Portrait"
-local PARTY_ART = "Interface\\TargetingFrame\\UI-PartyFrame"
 
 local function text(parent, x, y, width, size, alignment)
     local font = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -36,7 +35,7 @@ local function portraitRim(parent, size, layer)
     local rim = parent:CreateTexture(nil, layer)
     rim:SetTexture(PORTRAIT_ART)
     -- Circular rim, excluding the bars: pixels (4,2)-(72,70) of 256x128.
-    rim:SetTexCoord(4/256, 72/256, 2/128, 70/128)
+    rim:SetTexCoord(72/256, 4/256, 2/128, 70/128)
     rim:SetSize(size, size)
     rim:SetPoint("CENTER")
     circleMask(parent, rim, size)
@@ -59,20 +58,22 @@ end
 
 local function barTrim(card)
     local trim = CreateFrame("Frame", nil, card)
-    trim:SetPoint("TOPLEFT", 52, -12)
-    trim:SetSize(120, 26)
+    trim:SetPoint("TOPLEFT", 0, -15)
+    trim:SetSize(L.barWidth + 10, 33)
     trim:SetFrameLevel(card.health:GetFrameLevel() + 2)
     trim:EnableMouse(false)
-    -- Keep native bevels and endcaps; stretch only the straight center.
-    for _, slice in ipairs({{44,48,0,5}, {48,112,5,105}, {112,120,110,10}}) do
+    -- The native player sheet has the same silver trim at higher resolution
+    -- than the tiny party sheet. Use its health/power rows, omitting the name
+    -- box. Mirror the caps and stretch only the straight center section.
+    for _, slice in ipairs({{193,185,0,10}, {185,73,10,L.barWidth-7}, {73,67,L.barWidth+3,7}}) do
         local art = trim:CreateTexture(nil, "ARTWORK")
-        art:SetTexture(PARTY_ART)
-        art:SetTexCoord(slice[1]/128, slice[2]/128, 8/64, 28/64)
-        art:SetSize(slice[4], 26)
+        art:SetTexture(PORTRAIT_ART)
+        art:SetTexCoord(slice[1]/256, slice[2]/256, 33/128, 60/128)
+        art:SetSize(slice[4], 33)
         art:SetPoint("TOPLEFT", slice[3], 0)
     end
-    card.health.text = text(trim, 5, -3, L.barWidth, 9, "CENTER")
-    card.power.text = text(trim, 5, -14, L.barWidth, 8, "CENTER")
+    card.health.text = text(trim, 5, -4, L.barWidth, 11, "CENTER")
+    card.power.text = text(trim, 5, -18, L.barWidth, 10, "CENTER")
 end
 
 local function rateBar(card)
@@ -94,12 +95,12 @@ local function rateBar(card)
     bar.damageFill:SetColorTexture(0.43, 0.065, 0.045, 1)
     -- Fixed text columns never follow the moving meeting point of the fills.
     local center = bar:CreateTexture(nil, "ARTWORK", nil, 1)
-    center:SetPoint("TOPLEFT", 35, 0)
-    center:SetSize(40, L.rateHeight)
+    center:SetPoint("TOPLEFT", 58, 0)
+    center:SetSize(58, L.rateHeight)
     center:SetColorTexture(0.01, 0.012, 0.014, 0.3)
-    card.healRate = text(bar, 2, -1, 32, 8, "LEFT")
-    card.netRate = text(bar, 35, -1, 40, 8, "CENTER")
-    card.damageRate = text(bar, 76, -1, 32, 8, "RIGHT")
+    card.healRate = text(bar, 2, -1, 53, 9, "LEFT")
+    card.netRate = text(bar, 58, -1, 58, 9, "CENTER")
+    card.damageRate = text(bar, 119, -1, 53, 9, "RIGHT")
     card.healRate:SetTextColor(0.65, 1, 0.68)
     card.damageRate:SetTextColor(1, 0.7, 0.63)
 end
@@ -172,7 +173,8 @@ function Visuals:DecorateSpellButton(button, size)
     button.icon:SetPoint("BOTTOMRIGHT", -1, 1)
     button.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
     if button.kind == "heals" and button.card then
-        circleMask(button, button.icon, L.portraitInner, button.card.portraitArea)
+        button.portraitMask = circleMask(button, button.icon, L.portraitInner, button.card.portraitArea)
+        button.maskAttached = true
     else
         button.rim = button:CreateTexture(nil, "OVERLAY")
         button.rim:SetTexture("Interface\\Buttons\\UI-Quickslot2")
@@ -205,13 +207,13 @@ end
 
 function Visuals:DecorateUnit(card)
     card:SetSize(L.width, L.height)
-    card.health = statusBar(card, -16, 9, 0.10, 0.75, 0.12)
-    card.power = statusBar(card, -27, 8, 0.12, 0.28, 0.88)
+    card.health = statusBar(card, -20, 12, 0.10, 0.75, 0.12)
+    card.power = statusBar(card, -34, 10, 0.12, 0.28, 0.88)
     barTrim(card)
     local area = CreateFrame("Frame", nil, card)
     card.portraitArea = area
     area:SetSize(L.portrait, L.portrait)
-    area:SetPoint("TOPLEFT", 0, -1)
+    area:SetPoint("TOPLEFT", L.portraitX, -1)
     area:SetFrameLevel(card.health:GetFrameLevel() + 4)
     area:EnableMouse(false)
     card.targetRing = portraitRim(area, L.portrait + 3, "BACKGROUND")
@@ -223,15 +225,15 @@ function Visuals:DecorateUnit(card)
     card.portrait:SetPoint("CENTER")
     circleMask(area, card.portrait, L.portraitInner)
     card.portraitRim = portraitRim(area, L.portrait, "OVERLAY")
-    card.name = text(card, 58, 0, 80, 11)
-    card.status = text(card, 139, -1, 34, 8, "RIGHT")
+    card.name = text(card, L.barX, 0, L.barWidth - 40, 12)
+    card.status = text(card, L.barX + L.barWidth - 36, -2, 36, 9, "RIGHT")
     card.status:SetTextColor(0.82, 0.8, 0.72)
     rateBar(card)
     self:PaintRates(card, nil, nil, nil, "Collecting rates")
-    card.debuffLabel = text(card, 50, L.debuffY - 4, 34, 8, "RIGHT")
+    card.debuffLabel = text(card, L.barX, L.debuffY - 4, 35, 8, "RIGHT")
     card.debuffLabel:SetText("Debuffs")
     card.debuffLabel:SetTextColor(0.9, 0.8, 0.72)
-    card.buffLabel = text(card, 50, L.buffY - 4, 34, 8, "RIGHT")
+    card.buffLabel = text(card, L.barX, L.buffY - 4, 35, 8, "RIGHT")
     card.buffLabel:SetText("Buffs")
     card.buffLabel:SetTextColor(0.9, 0.86, 0.7)
     card.debuffs = {}
@@ -261,11 +263,33 @@ function Visuals:DecorateUnit(card)
     return card
 end
 
+function Visuals:ApplyControlStyle(card)
+    local round = ns.db and ns.db.controlStyle == "quadrants"
+    card.controlStyle = round and "quadrants" or "buttons"
+    for index, button in ipairs(card.heals or {}) do
+        if round and not button.maskAttached then
+            button.icon:AddMaskTexture(button.portraitMask)
+            button.maskAttached = true
+        elseif not round and button.maskAttached then
+            button.icon:RemoveMaskTexture(button.portraitMask)
+            button.maskAttached = false
+        end
+        button.rank:ClearAllPoints()
+        button.rank:SetPoint("TOPLEFT", 0, round and index > 2 and -1 or -(L.healSize - 10))
+        button.rank:SetFont(FONT, 10, "OUTLINE")
+    end
+    self:SetPortraitHover(card, false)
+end
+
 function Visuals:SetPortraitHover(card, show)
+    local round = card.controlStyle == "quadrants"
     local alpha = show and 1 or 0
+    card.portrait:SetAlpha(show and not round and 0 or 1)
+    card.portraitRim:SetAlpha(show and not round and 0 or 1)
     for _, button in ipairs(card.heals or {}) do
         button.icon:SetAlpha(alpha)
         button.rank:SetAlpha(alpha)
+        button.border:SetAlpha(show and not round and 1 or 0)
     end
-    for _, divider in ipairs(card.portraitDividers or {}) do divider:SetAlpha(alpha) end
+    for _, divider in ipairs(card.portraitDividers or {}) do divider:SetAlpha(round and alpha or 0) end
 end

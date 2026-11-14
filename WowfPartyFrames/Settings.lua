@@ -1,8 +1,10 @@
 local _, ns = ...
-local Settings = {}
+local Settings = { healLayer = "base" }
 ns.Settings = Settings
 local QUADRANT_LABELS = { "Top left", "Top right", "Bottom left", "Bottom right" }
-local WIDTH, BUFF_TOP, BUFF_ROW = 340, 232, 76
+local WIDTH, BUFF_TOP, BUFF_ROW = 340, 259, 76
+local LAYERS = { {"base", "Base"}, {"shift", "Shift"}, {"ctrl", "Ctrl"}, {"ctrlshift", "Shift+Ctrl"} }
+local LAYER_NAMES = { base = "Base", shift = "Shift", ctrl = "Ctrl", ctrlshift = "Shift+Ctrl" }
 
 local function label(parent, text, x, y, template)
     local result = parent:CreateFontString(nil, "OVERLAY", template or "GameFontNormal")
@@ -27,11 +29,52 @@ function Settings:Assign(slot, clear)
         if not record then self.frame.note:SetText(reason); return false end
     end
     local ok
-    ok, reason = ns.Profiles:SetSpell(self.presetID, slot.kind, slot.index, record and record.id or nil)
+    ok, reason = ns.Profiles:SetSpell(self.presetID, slot.kind, slot.index, record and record.id or nil, slot.kind == "heals" and self.healLayer or nil)
     if not ok then self.frame.note:SetText(reason); return false end
     if record then ClearCursor() end
     self:Refresh()
     return true
+end
+
+function Settings:SelectHealLayer(layer)
+    if not LAYER_NAMES[layer] then return false end
+    self.healLayer = layer
+    self:Refresh()
+    if ns.Frames then ns.Frames:RefreshAll() end
+    return true
+end
+
+function Settings:SetControlStyle(style)
+    if style ~= "buttons" and style ~= "quadrants" then return false end
+    if ns.InCombat() then
+        if self.frame then self.frame.note:SetText("Change portrait controls after combat ends.") end
+        return false
+    end
+    local db = ns.db or ns.Profiles.db
+    if not db then return false end
+    db.controlStyle = style
+    if ns.Frames then ns.Frames:ApplyProfiles(); ns.Frames:RefreshAll() end
+    self:Refresh()
+    return true
+end
+
+local function choice(parent, text, width, click)
+    local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    button:SetSize(width, 22)
+    ns.SetBackdrop(button, {0.035, 0.03, 0.025, 1}, {0.4, 0.35, 0.25, 1})
+    button.title = label(button, text, 0, -6, "GameFontHighlightSmall")
+    button.title:SetWidth(width)
+    button.title:SetJustifyH("CENTER")
+    button:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+    button:SetScript("OnClick", click)
+    return button
+end
+
+local function paintChoice(button, selected, locked)
+    button.selected = selected
+    button:SetBackdropBorderColor(selected and 0.9 or 0.4, selected and 0.72 or 0.35, selected and 0.38 or 0.25, 1)
+    button.title:SetTextColor(1, selected and 0.82 or 1, selected and 0 or 1)
+    button:SetAlpha(locked and 0.55 or 1)
 end
 
 local function createSlot(parent, kind, index, x, y, width)
@@ -72,10 +115,10 @@ local function createSlot(parent, kind, index, x, y, width)
     end)
     button:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        local id = ns.Profiles:GetSpell(Settings.presetID, self.kind, self.index)
+        local id = ns.Profiles:GetSpell(Settings.presetID, self.kind, self.index, self.kind == "heals" and Settings.healLayer or nil)
         if id then GameTooltip:SetSpellByID(id) else GameTooltip:SetText("Drag a spell here") end
         if self.kind == "heals" then
-            GameTooltip:AddLine(QUADRANT_LABELS[self.index] .. " portrait quadrant", 1, 0.82, 0)
+            GameTooltip:AddLine(LAYER_NAMES[Settings.healLayer] .. " - " .. QUADRANT_LABELS[self.index], 1, 0.82, 0)
         end
         GameTooltip:AddLine("Drag a spell to assign its exact rank.", 0.85, 0.85, 0.85, true)
         GameTooltip:AddLine("Right-click to clear. Changes save immediately.", 0.85, 0.85, 0.85, true)
@@ -241,7 +284,7 @@ function Settings:Create()
     local frame = CreateFrame("Frame", "WowfPartyFramesSettings", UIParent, "BackdropTemplate")
     self.frame = frame
     self.presetID = self.presetID or "default"
-    frame:SetSize(WIDTH, 330)
+    frame:SetSize(WIDTH, 389)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("DIALOG")
     frame:EnableMouse(true)
@@ -302,17 +345,39 @@ function Settings:Create()
     frame:SetScript("OnHide", function() menu:Hide(); if self.dialog then self.dialog:Hide() end; GameTooltip:Hide() end)
 
     label(frame, "Healing abilities", 17, -80, "GameFontNormal")
+    frame.layerTabs = {}
+    for index, layer in ipairs(LAYERS) do
+        local id = layer[1]
+        local tab = choice(frame, layer[2], 74, function() Settings:SelectHealLayer(id) end)
+        tab:SetPoint("TOPLEFT", 17 + (index - 1) * 78, -100)
+        frame.layerTabs[id] = tab
+    end
     self.healSlots, self.buffSlots = {}, {}
     for index = 1, 4 do
         local x = 17 + ((index - 1) % 2) * 157
-        local y = -103 - math.floor((index - 1) / 2) * 52
+        local y = -130 - math.floor((index - 1) / 2) * 52
         self.healSlots[index] = createSlot(frame, "heals", index, x, y, 149)
     end
-    label(frame, "Buffs", 17, -210, "GameFontNormal")
+    label(frame, "Buffs", 17, -237, "GameFontNormal")
     for index = 1, ns.MAX_BUFFS do
         self.buffSlots[index] = createSlot(frame, "buffs", index, 17, -BUFF_TOP, 72)
     end
-    frame.note = label(frame, "", 17, -304, "GameFontHighlightSmall")
+    frame.styleLabel = label(frame, "Portrait controls", 17, -337, "GameFontHighlightSmall")
+    frame.styleButtons = {}
+    for index, style in ipairs({ {"buttons", "Buttons"}, {"quadrants", "Quadrants"} }) do
+        local id = style[1]
+        local control = choice(frame, style[2], 90, function() Settings:SetControlStyle(id) end)
+        control:SetPoint("TOPLEFT", 132 + (index - 1) * 96, -331)
+        control:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(id == "buttons" and "Four full square spell buttons on hover." or "Four sections inside the circular portrait.")
+            if ns.InCombat() then GameTooltip:AddLine("Change after combat ends.", 1, 0.3, 0.3) end
+            GameTooltip:Show()
+        end)
+        control:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        frame.styleButtons[id] = control
+    end
+    frame.note = label(frame, "", 17, -363, "GameFontHighlightSmall")
     frame.note:SetWidth(WIDTH - 34)
     frame.note:SetJustifyH("LEFT")
     frame.note:SetWordWrap(true)
@@ -335,8 +400,12 @@ function Settings:Refresh()
     frame.selector.title:SetTextColor(1, 0.82, 0)
     self:RefreshMenu()
     local locked = ns.InCombat()
+    for id, tab in pairs(frame.layerTabs) do paintChoice(tab, id == self.healLayer, false) end
+    local db = ns.db or ns.Profiles.db
+    local style = db and db.controlStyle or "buttons"
+    for id, control in pairs(frame.styleButtons) do paintChoice(control, id == style, locked) end
     local function paint(slot)
-        local id = ns.Profiles:GetSpell(self.presetID, slot.kind, slot.index)
+        local id = ns.Profiles:GetSpell(self.presetID, slot.kind, slot.index, slot.kind == "heals" and self.healLayer or nil)
         local spell = ns.Spells:Get(id)
         slot.icon:SetTexture(spell and spell.icon or "Interface\\PaperDoll\\UI-Backpack-EmptySlot")
         slot.icon:SetDesaturated(locked)
@@ -368,9 +437,16 @@ function Settings:Refresh()
         slot:Show()
     end
     local rows = math.max(1, math.ceil(#visible / 4))
-    frame:SetHeight(330 + (rows - 1) * BUFF_ROW)
+    frame:SetHeight(389 + (rows - 1) * BUFF_ROW)
+    frame.styleLabel:ClearAllPoints()
+    frame.styleLabel:SetPoint("TOPLEFT", 17, -337 - (rows - 1) * BUFF_ROW)
+    for index, id in ipairs({"buttons", "quadrants"}) do
+        local control = frame.styleButtons[id]
+        control:ClearAllPoints()
+        control:SetPoint("TOPLEFT", 132 + (index - 1) * 96, -331 - (rows - 1) * BUFF_ROW)
+    end
     frame.note:ClearAllPoints()
-    frame.note:SetPoint("TOPLEFT", 17, -304 - (rows - 1) * BUFF_ROW)
+    frame.note:SetPoint("TOPLEFT", 17, -363 - (rows - 1) * BUFF_ROW)
     frame.note:SetText(locked and "Assignments are locked during combat."
         or "Drag spells here. Ranks are saved. Right-click to clear.")
 end

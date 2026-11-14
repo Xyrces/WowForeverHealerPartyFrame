@@ -2,6 +2,7 @@ local _, ns = ...
 local Profiles = {}
 ns.Profiles = Profiles
 local MAX_PRESETS = 40
+local HEAL_LAYERS = { "shift", "ctrl", "ctrlshift" }
 
 local function integer(value, maximum)
     return not ns.IsSecret(value) and type(value) == "number"
@@ -26,14 +27,31 @@ end
 
 local function cleanSpells(source)
     source = type(source) == "table" and source or {}
-    local clean = { heals = {}, buffs = {} }
+    local clean = { heals = {}, buffs = {}, healLayers = {} }
     for _, kind in ipairs({ "heals", "buffs" }) do
         local slots = type(source[kind]) == "table" and source[kind] or {}
         for index = 1, kind == "heals" and 4 or ns.MAX_BUFFS do
             if integer(slots[index]) then clean[kind][index] = slots[index] end
         end
     end
+    local layers = type(source.healLayers) == "table" and source.healLayers or {}
+    for _, layer in ipairs(HEAL_LAYERS) do
+        clean.healLayers[layer] = {}
+        local slots = type(layers[layer]) == "table" and layers[layer] or {}
+        for index = 1, 4 do
+            if integer(slots[index]) then clean.healLayers[layer][index] = slots[index] end
+        end
+    end
     return clean
+end
+
+local function spellSlots(profile, kind, layer)
+    if kind == "buffs" then return profile.buffs end
+    if ns.IsSecret(layer) then return nil end
+    if layer == nil or layer == "base" then return profile.heals end
+    if layer == "shift" or layer == "ctrl" or layer == "ctrlshift" then
+        return profile.healLayers[layer]
+    end
 end
 
 local function changed(id)
@@ -68,7 +86,7 @@ function Profiles:Init(saved)
         if type(old[id]) == "table" then add(id, old[id], old[id].name) end
     end
     -- Migrate only once: class is no longer an assignment rule.
-    if saved.version ~= 2 and type(saved.classes) == "table" then
+    if (not integer(saved.version) or saved.version < 2) and type(saved.classes) == "table" then
         for _, class in ipairs(ns.CLASSES) do
             local source = saved.classes[class.token]
             local clean = cleanSpells(source)
@@ -92,7 +110,8 @@ function Profiles:Init(saved)
         x = coordinate(p.x, 16), y = coordinate(p.y, -128),
     }
     saved.scale = type(saved.scale) == "number" and saved.scale >= 0.5 and saved.scale <= 2 and saved.scale or 1
-    saved.version = 2
+    saved.controlStyle = saved.controlStyle == "quadrants" and "quadrants" or "buttons"
+    saved.version = 3
     self.db = saved
     WowfPartyFramesDB = saved
     return saved
@@ -113,21 +132,24 @@ function Profiles:List()
     return list
 end
 
-function Profiles:GetSpell(id, kind, index)
+function Profiles:GetSpell(id, kind, index, layer)
     if not validSlot(kind, index) then return nil end
     local profile = self:GetPreset(id)
-    return profile and profile[kind][index] or nil
+    local slots = profile and spellSlots(profile, kind, layer)
+    return slots and slots[index] or nil
 end
 
-function Profiles:SetSpell(id, kind, index, spellID)
+function Profiles:SetSpell(id, kind, index, spellID, layer)
     if ns.InCombat() then return false, "Assignments cannot change during combat." end
     local profile = self:GetPreset(id)
     if not profile or not validSlot(kind, index) then return false, "Invalid preset or spell slot." end
+    local slots = spellSlots(profile, kind, layer)
+    if not slots then return false, "Choose a valid healing modifier layer." end
     if ns.IsSecret(spellID) then return false, "Spell information is unavailable." end
     if spellID ~= nil and (not integer(spellID) or not ns.Spells:Get(spellID)) then
         return false, "Choose a spell from your spellbook."
     end
-    profile[kind][index] = spellID
+    slots[index] = spellID
     changed(id)
     return true
 end

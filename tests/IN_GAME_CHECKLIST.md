@@ -8,15 +8,18 @@ Record the client build, addon version, pass/fail results, and exact error text 
 
 - [ ] The addon appears in the AddOns list and loads without Lua errors.
 - [ ] While solo, `/wpf test` shows four floating vanilla-style frames with attached bars, class colors, numerical resources, and readable rates and aura rows. There is no enclosing window, border, background, or close button. A small caption identifies the preview, class icons stand in for portraits, and clicking casts nothing.
-- [ ] Portrait hover reveals four distinct spell quadrants; leaving the portrait restores the portrait image.
+- [ ] Portraits appear on the right of the bars. Portrait hover reveals four full square buttons in Buttons mode, or circular quadrants in Quadrants mode. Switching modes retains all spells, persists across reload, and is refused during combat. Leaving the controls restores the portrait.
 - [ ] Test at the UI scale and screen resolution actually used in play. Names, resource totals, spell ranks, and timers do not overlap or become clipped.
-- [ ] Check the compact proportions against the native party frames: 54-unit portraits, 110-unit bars, and 90-unit row spacing. Bottom healing-quadrant rank labels stay inside the portrait, and three/four-digit rates remain readable.
+- [ ] Check 82-unit portraits, 36×36 healing buttons, 174-unit bars, and 110-unit row spacing. The existing native silver trim, green health and resource fills keep their appearance. Ranks remain inside both control styles; all eight debuffs and assigned buffs fit without overlapping controls.
+- [ ] Hover spells on the top and bottom member. Tooltips sit outside the party stack. Move the stack near the right edge and verify tooltips switch to its left.
+- [ ] The minimap AddOns menu has exactly one WoW Forever Party Frames entry. Clicking opens the same settings as `/wpf`; repeated zoning/reload does not duplicate it.
 - [ ] `/wpf unlock` reveals a text handle. Dragging and releasing moves the frames; `/wpf lock` hides the handle. `/wpf reset` places the frames at the native party-frame position. Preview and live frames share that position, and a custom position survives `/reload`.
 - [ ] `/wpf blizzard` restores/hides native party frames and retains the choice after `/reload`.
 
 ## Simple settings and ranks
 
-- [ ] `/wpf settings` contains one preset selector, four healing slots, and buff slots; fresh profiles have an empty editable Default preset.
+- [ ] `/wpf settings` contains one preset selector, Base/Shift/Ctrl/Shift+Ctrl tabs, four healing slots, buff slots, and Buttons/Quadrants choices; fresh profiles have an empty editable Default preset.
+- [ ] Existing named presets retain exact old spells in Base; the three new modifier layers start empty. Duplicate copies all layers independently.
 - [ ] Existing nonempty class configurations migrate to named presets, preserving every assigned spell and rank. They are not automatically assigned by class.
 - [ ] The preset dropdown has a native arrow graphic, hover/pressed feedback, and a selection checkmark. New, Duplicate, Rename, and Delete work; duplicate edits do not alter the source. Long lists paginate and keep management actions reachable. Default cannot be renamed or deleted.
 - [ ] Create Tank and assign two ranks of one heal to different quadrants. The visible ranks match the spellbook.
@@ -27,6 +30,8 @@ Record the client build, addon version, pass/fail results, and exact error text 
 - [ ] Right-click a middle buff slot to clear it; remaining assignments stay intact and the empty slot can be reused.
 - [ ] Dropping an item or other invalid cursor content does not erase the old spell or consume the cursor item.
 - [ ] Assignments and exact ranks survive `/reload`.
+- [ ] Configure different exact ranks in the same slot across all four layers. Changing tabs shows the correct assignments and clearing one layer leaves the others unchanged. Buffs do not change with the selected layer.
+- [ ] Preview demonstrates the selected editor layer while no modifier is held. Physically holding Shift/Ctrl/both overrides that preview layer; release returns to the selected editor layer. Preview never casts.
 
 ## Preset assignment and remembered choices
 
@@ -46,7 +51,10 @@ Record the client build, addon version, pass/fail results, and exact error text 
 - [ ] Target one member, then heal a different member through each configured portrait quadrant. The intended member receives the intended rank and the original target remains selected.
 - [ ] Repeat with two ranks of the same heal, checking the cast/spellbook information and mana use as appropriate.
 - [ ] Missing assigned buffs offer reapplication; clicking applies the selected rank to the displayed member without changing the current target.
-- [ ] Right-click a buff to open its member's native menu. Holding Shift, Ctrl, or Alt while left-clicking a heal or buff still casts on the displayed member.
+- [ ] Base, Shift, Ctrl, and Shift+Ctrl each cast the assigned rank on the displayed member, including when those modifiers are configured for self/focus casting in the game. Every click dispatches once. Empty healing slots and every Alt combination cast nothing; they never fall back to Base.
+- [ ] While already hovering a healing button, press/release modifiers and verify its icon, rank, and tooltip update to the spell the next click casts. Repeat in combat with no protected-action errors.
+- [ ] Right-click the body, healing buttons, and buffs with every modifier combination; the same native member menu and preset submenu remain available. Modified left-clicks on buffs retain their assigned buff and displayed member.
+- [ ] Existing Shift/Ctrl keyboard binds outside these mouse controls still work. If another click-casting addon is enabled, check it does not take ownership of these same buttons.
 - [ ] Active buffs show their available timers/stacks. Let one expire and verify that its missing-state display returns.
 - [ ] Apply another rank of an assigned buff and verify it is recognized as present when aura data is readable.
 - [ ] Observe Weakened Soul on a party member while another member is targeted. Confirm it remains visible with other debuffs.
