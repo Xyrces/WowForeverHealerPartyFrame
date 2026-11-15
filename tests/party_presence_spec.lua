@@ -57,6 +57,29 @@ eq(popups[3],"SHARD_TRANSFER_IMMEDIATE")
 info={}
 P:Update(card,info);eq(b.shown,false);eq(card.presenceDim,false);eq(card.location:GetText(),"")
 P:Clear(card);eq(b.shown,false)
-local preview={previewIndex=1};P:Create(preview);eq(preview.presenceButton,nil)
+local preview=CreateFrame("Frame",nil,UIParent)
+preview.previewIndex=1
+preview.portraitArea=CreateFrame("Frame",nil,preview)
+preview.portrait=preview.portraitArea:CreateTexture()
+preview.location=preview:CreateFontString()
+preview.previewInfo={presenceKind="shard",presenceText="Different shard",presenceTexture="phase",
+    presenceTooltip="Sample shard mismatch",differentShard=true,presenceDim=true,location="Westfall"}
+P:Create(preview)
+local pb=preview.presenceButton
+eq(pb.protected,false);eq(pb.template,nil,"sample presence never gains secure behavior")
+P:Update(preview,preview.previewInfo)
+eq(pb:IsShown(),true);eq(pb.icon.texture,b.icon.texture)
+eq(preview.location:GetText(),"Different shard · Westfall");eq(preview.presenceDim,true)
+ns.MemberInfo.Get=function() error("preview cannot query live member info") end
+GetEvictionTimeRemaining=function() error("preview cannot inspect real transfer") end
+pb:GetScript("OnEnter")(pb)
+eq(GameTooltip:GetText(),"Different shard")
+eq(GameTooltip.AddLineArgs[1],"Sample data: no party actions or shard transfer.")
+local popupCount,menuCount=#popups,#menus
+pb:GetScript("OnClick")(pb,"LeftButton");pb:GetScript("OnClick")(pb,"RightButton")
+eq(#popups,popupCount,"sample shard cannot offer a real transfer")
+eq(#menus,menuCount,"sample presence cannot open a real member menu")
+P:Clear(preview);eq(pb:IsShown(),false)
+P:Update(preview,{});eq(preview.location:GetText(),"");eq(preview.presenceDim,false)
 eq(#ui.violations,0)
 print("party_presence_spec: "..checks.." checks passed")

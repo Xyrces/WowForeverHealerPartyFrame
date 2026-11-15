@@ -46,7 +46,8 @@ function Status:Create(card)
     if card.partyStatus then return true end
     if ns.InCombat() then return false end
     local s={lines={}}
-    card.partyStatus=s;self.cards[card]=true
+    card.partyStatus=s
+    if not card.previewIndex then self.cards[card]=true end
     local holder=CreateFrame("Frame",nil,card)
     s.holder=holder;holder:SetAllPoints(card.portraitArea)
     holder:SetFrameLevel(card.portraitArea:GetFrameLevel()+6);holder:EnableMouse(false)
@@ -59,6 +60,11 @@ function Status:Create(card)
     s.voiceAnchor:SetSize(16,16)
     s.voiceAnchor:SetPoint("LEFT",card.portraitArea,"LEFT",-2,0)
     s.voiceAnchor:EnableMouse(false)
+    if card.previewIndex then
+        -- A sample speaker uses the native art, never a real voice subscription.
+        s.previewVoice=icon(s.voiceAnchor,16,"CENTER",s.voiceAnchor,0,0)
+        s.previewVoice:SetAtlas("voicechat-icon-speaker")
+    end
     local warnings=CreateFrame("Frame",nil,card)
     s.warnings=warnings;warnings:SetAllPoints(card.portraitArea)
     warnings:SetFrameLevel(card.portraitArea:GetFrameLevel()+1);warnings:EnableMouse(false)
@@ -76,6 +82,7 @@ end
 
 local function releaseVoice(s)
     s.voiceAnchor:SetAlpha(0)
+    if s.previewVoice then s.previewVoice:Hide() end
     if s.voiceGUID and VoiceActivityManager and VoiceActivityManager.UnregisterFrameForVoiceActivityNotifications then
         pcall(VoiceActivityManager.UnregisterFrameForVoiceActivityNotifications,VoiceActivityManager,s.voiceAnchor)
     end
@@ -153,25 +160,14 @@ local function updateReady(self,s,unit,connected)
     s.ready:SetAlpha(alpha)
 end
 
-local function paintWarnings(self,card,s,unit,connected,dead,ghost)
-    s.threat:SetAlpha(0);s.lowHolder:SetAlpha(0)
-    card.portrait:SetDesaturated(not connected or card.presenceDim == true)
-    if not connected or dead then card.portrait:SetVertexColor(0.35,0.35,0.35);return end
-    if ghost then card.portrait:SetVertexColor(0.2,0.2,0.75);return end
-    card.portrait:SetVertexColor(1,1,1)
-    if self.healthCurve and type(UnitHealthPercent)=="function" then
-        pcall(function()
-            local r,g,b,a=UnitHealthPercent(unit,false,self.healthCurve):GetRGBA()
-            card.portrait:SetVertexColor(r,g,b)
-            -- The client gates the pulse with opaque alpha. Lua only computes
-            -- the time animation; it never compares or divides secret health.
-            s.lowHolder:SetAlpha(a)
-            s.low:SetAlpha(0.5+0.5*math.abs(math.sin(now()*math.pi*2)))
-        end)
-    end
-    local enabled=call(IsThreatWarningEnabled)
-    if not public(enabled,"boolean") or not enabled then return end
-    local threat=call(UnitThreatSituation,unit)
+local function paintHealthWarning(card,s,r,g,b,a)
+    card.portrait:SetVertexColor(r,g,b)
+    -- The client gates the pulse with opaque alpha. Lua only computes time.
+    s.lowHolder:SetAlpha(a)
+    s.low:SetAlpha(0.5+0.5*math.abs(math.sin(now()*math.pi*2)))
+end
+
+local function paintThreat(self,s,threat)
     if self.threatCurve and (type(threat)=="number" or ns.IsSecret(threat)) then
         pcall(function()
             local r,g,b,a=self.threatCurve:Evaluate(threat):GetRGBA()
@@ -182,6 +178,53 @@ local function paintWarnings(self,card,s,unit,connected,dead,ghost)
         local c=colors[threat]
         if c then s.threat:SetVertexColor(unpack(c));s.threat:SetAlpha(1) end
     end
+end
+
+local function paintWarnings(self,card,s,unit,connected,dead,ghost,sample)
+    s.threat:SetAlpha(0);s.lowHolder:SetAlpha(0)
+    card.portrait:SetDesaturated(not connected or card.presenceDim == true)
+    if not connected or dead then card.portrait:SetVertexColor(0.35,0.35,0.35);return end
+    if ghost then card.portrait:SetVertexColor(0.2,0.2,0.75);return end
+    card.portrait:SetVertexColor(1,1,1)
+    if sample then
+        -- Arithmetic here is only on the addon's explicit public fixture.
+        if type(sample.health)=="number" and type(sample.healthMax)=="number" and sample.healthMax>0 then
+            local fraction=sample.health/sample.healthMax
+            if self.healthCurve then
+                pcall(function() paintHealthWarning(card,s,self.healthCurve:Evaluate(fraction):GetRGBA()) end)
+            elseif fraction>0 and fraction<=.2 then paintHealthWarning(card,s,1,.05,.05,1) end
+        end
+        paintThreat(self,s,sample.threat)
+        return
+    end
+    if self.healthCurve and type(UnitHealthPercent)=="function" then
+        pcall(function() paintHealthWarning(card,s,UnitHealthPercent(unit,false,self.healthCurve):GetRGBA()) end)
+    end
+    local enabled=call(IsThreatWarningEnabled)
+    if not public(enabled,"boolean") or not enabled then return end
+    paintThreat(self,s,call(UnitThreatSituation,unit))
+end
+
+-- Live data collection and explicit sample data share the same visual writer.
+local function paintBasics(card,s,connected,dead,ghost,leader,guide,pvp)
+    s.lines={}
+    setIcon(s.leader,leader and (guide and "UI-HUD-UnitFrame-Player-Group-GuideIcon" or "UI-HUD-UnitFrame-Player-Group-LeaderIcon") or nil)
+    if leader then s.lines[#s.lines+1]=guide and "Dungeon guide" or "Party leader" end
+    local pvpAtlas=pvp=="FFA" and "ui-hud-unitframe-player-pvp-ffaicon"
+        or pvp=="Horde" and "ui-hud-unitframe-player-pvp-hordeicon"
+        or pvp=="Alliance" and "ui-hud-unitframe-player-pvp-allianceicon" or nil
+    setIcon(s.pvp,pvpAtlas)
+    if pvpAtlas then s.lines[#s.lines+1]=pvp=="FFA" and "Free-for-all PvP" or "PvP flagged" end
+    s.disconnect:SetShown(not connected)
+    if card.status then card.status:SetText(not connected and "Offline" or ghost and "Ghost" or dead and "Dead" or "") end
+    if card.health and card.health.GetStatusBarTexture then
+        local t=call(card.health.GetStatusBarTexture,card.health)
+        if t and t.SetDesaturated then t:SetDesaturated(not connected) end
+    end
+end
+
+local function readyTooltip(s)
+    if s.readyState then s.lines[#s.lines+1]=s.readyState=="ready" and "Ready" or s.readyState=="waiting" and "Ready check: waiting" or "Not ready" end
 end
 
 function Status:Update(card,unit)
@@ -203,27 +246,33 @@ function Status:Update(card,unit)
     local leader=public(leaderValue,"boolean") and leaderValue
     local guideValue=call(HasLFGRestrictions)
     local guide=public(guideValue,"boolean") and guideValue
-    setIcon(s.leader,leader and (guide and "UI-HUD-UnitFrame-Player-Group-GuideIcon" or "UI-HUD-UnitFrame-Player-Group-LeaderIcon") or nil)
-    if leader then s.lines[#s.lines+1]=guide and "Dungeon guide" or "Party leader" end
     local pvpValue,ffaValue=call(UnitIsPVP,unit),call(UnitIsPVPFreeForAll,unit)
     local pvp=public(pvpValue,"boolean") and pvpValue
     local ffa=public(ffaValue,"boolean") and ffaValue
     local faction=call(UnitFactionGroup,unit)
-    local pvpAtlas=ffa and "ui-hud-unitframe-player-pvp-ffaicon"
-        or pvp and public(faction,"string") and (faction=="Horde" and "ui-hud-unitframe-player-pvp-hordeicon"
-        or faction=="Alliance" and "ui-hud-unitframe-player-pvp-allianceicon") or nil
-    setIcon(s.pvp,pvpAtlas)
-    if pvpAtlas then s.lines[#s.lines+1]=ffa and "Free-for-all PvP" or "PvP flagged" end
-    s.disconnect:SetShown(not connected)
-    if card.status then card.status:SetText(not connected and "Offline" or ghost and "Ghost" or dead and "Dead" or "") end
-    if card.health and card.health.GetStatusBarTexture then
-        local t=call(card.health.GetStatusBarTexture,card.health)
-        if t and t.SetDesaturated then t:SetDesaturated(not connected) end
-    end
+    local pvpKind=ffa and "FFA" or pvp and public(faction,"string") and faction or nil
+    paintBasics(card,s,connected,dead,ghost,leader,guide,pvpKind)
     updateReady(self,s,unit,connected)
-    if s.readyState then s.lines[#s.lines+1]=s.readyState=="ready" and "Ready" or s.readyState=="waiting" and "Ready check: waiting" or "Not ready" end
+    readyTooltip(s)
     paintWarnings(self,card,s,unit,connected,dead,ghost)
     updateVoice(card,s,unit,connected)
+    return true
+end
+
+function Status:Preview(card,sample)
+    if not card.previewIndex then return false end
+    if not card.partyStatus and not self:Create(card) then return false end
+    local s=card.partyStatus
+    sample=sample or {}
+    local connected=sample.connected~=false
+    local dead,ghost=sample.dead==true,sample.ghost==true
+    paintBasics(card,s,connected,dead,ghost,sample.leader==true,sample.guide==true,sample.pvp)
+    s.readyState=connected and READY[sample.readyState] and sample.readyState or nil
+    setIcon(s.ready,s.readyState and READY[s.readyState]);s.ready:SetAlpha(1)
+    readyTooltip(s)
+    paintWarnings(self,card,s,nil,connected,dead,ghost,sample)
+    s.previewVoice:SetShown(connected and sample.voice==true)
+    s.voiceAnchor:SetAlpha(connected and sample.voice==true and 1 or 0)
     return true
 end
 

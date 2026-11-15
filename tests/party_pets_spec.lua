@@ -305,8 +305,44 @@ local unsupported=card()
 eq(P:Create(unsupported),false)
 eq(unsupported.partyPet.button,nil,"unsupported watcher creates no ghost region")
 RegisterUnitWatch=watch
-local preview=card();preview.previewIndex=1
-eq(P:Create(preview),false,"preview does not invent a live secure pet target")
-eq(preview.partyPet,nil)
+local preview=CreateFrame("Frame",nil,UIParent);preview.previewIndex=1
+local previousContainers=#containers
+local watchCount=0;for _ in pairs(watches) do watchCount=watchCount+1 end
+local oldExists,oldHealth,oldConnected=UnitExists,UnitHealth,UnitIsConnected
+UnitExists=function() error("preview must not query units") end
+UnitHealth=UnitExists;UnitIsConnected=UnitExists
+local oldNative=C_AuraContainerUtil;C_AuraContainerUtil=nil
+eq(P:Create(preview),true,"sample pet shares geometry but has no secure target")
+local ps=preview.partyPet
+eq(ps.button.protected,false)
+eq(ps.button:GetAttribute("type1"),nil);eq(ps.button:GetAttribute("type2"),nil)
+eq(ps.button:GetAttribute("unit"),nil);eq(ps.button:GetAttribute("useparent-unit"),nil)
+eq(ps.button:GetScript("OnClick"),nil)
+eq(ps.button:GetWidth(),c.partyPet.button:GetWidth(),"live and sample row width")
+eq(ps.health:GetWidth(),c.partyPet.health:GetWidth(),"live and sample health width")
+eq(ps.button:IsShown(),false,"no pet data means no invented clickable row")
+local pet={name="Companion",icon=123,health=420,healthMax=600,threat=2,
+    debuffs={{name="Poison",icon=456,durationText="12s",stacks=3,dispelType="Poison",description="Sample poison"}}}
+enabled=true;eq(P:Preview(preview,pet),true)
+eq(ps.button:IsShown(),true);eq(ps.health.value,420);eq(ps.health.maximum,600)
+eq(ps.text.formatValues[1],420);eq(ps.portrait.texture,123)
+eq(#containers,previousContainers,"sample pets create no native aura containers")
+local countAfter=0;for _ in pairs(watches) do countAfter=countAfter+1 end
+eq(countAfter,watchCount,"sample pets register no unit watches")
+local pa=ps.sampleAuras[1]
+eq(pa.sampleIcon.texture,456);eq(pa.sampleTimer:GetText(),"12s");eq(pa.sampleCount:GetText(),"3")
+eq(pa.sampleBorder.SetVertexColorArgs[2],.6)
+eq(pa:GetAttribute("type1"),nil);eq(pa:GetScript("OnClick"),nil)
+ps.button:GetScript("OnEnter")(ps.button)
+eq(GameTooltip:GetText(),"Companion")
+eq(GameTooltip.AddLineArgs[1]:find("Sample data",1,true)~=nil,true)
+pa:GetScript("OnEnter")(pa);eq(GameTooltip:GetText(),"Poison")
+pa:GetScript("OnLeave")(pa);eq(GameTooltip:IsShown(),false)
+enabled=false;P:Configure(preview);eq(ps.button:IsShown(),false,"native option also hides sample pets")
+enabled=true;P:Configure(preview);eq(ps.button:IsShown(),true,"option restores stored sample")
+P:Clear(preview);eq(ps.button:IsShown(),false)
+P:Preview(preview,pet);eq(ps.button:IsShown(),true,"reopening restores same fixture")
+P:Preview(preview,nil);eq(ps.button:IsShown(),false,"removed fixture clears old row")
+UnitExists=oldExists;UnitHealth=oldHealth;UnitIsConnected=oldConnected;C_AuraContainerUtil=oldNative
 eq(#ui.violations,0)
 print("party_pets_spec: "..checks.." checks passed (native watcher simulated, not engine proof)")

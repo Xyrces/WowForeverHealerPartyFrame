@@ -137,6 +137,17 @@ local function zone(unit)
     end
 end
 
+function MemberInfo:Summarize(result)
+    local identity = {}
+    if result.level then identity[#identity + 1] = tostring(result.level) end
+    if result.class then identity[#identity + 1] = result.class end
+    local summary = table.concat(identity, " ")
+    if result.role then
+        summary = summary ~= "" and (summary .. " · " .. result.role) or result.role
+    end
+    return summary
+end
+
 function MemberInfo:Get(unit, presetID)
     local result = {summary = "", preset = "Default"}
     local preset = ns.Profiles and call(ns.Profiles.GetPreset, ns.Profiles,
@@ -165,13 +176,7 @@ function MemberInfo:Get(unit, presetID)
         or (positiveInteger(marker) and marker <= 8)) then
         result.markerIndex = marker
     end
-    local identity = {}
-    if result.level then identity[#identity + 1] = tostring(result.level) end
-    if result.class then identity[#identity + 1] = result.class end
-    result.summary = table.concat(identity, " ")
-    if result.role then
-        result.summary = result.summary ~= "" and (result.summary .. " · " .. result.role) or result.role
-    end
+    result.summary = self:Summarize(result)
     local memberZone, playerZone = zone(unit), zone("player")
     if memberZone and playerZone and memberZone.id ~= playerZone.id then
         result.location = memberZone.name

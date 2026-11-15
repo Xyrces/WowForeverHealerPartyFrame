@@ -130,6 +130,14 @@ Record the client build, addon version, pass/fail results, and exact error text 
 - [ ] Voice activity appears only while the correct member speaks and cleans up on disconnect, roster changes, leaving the party, or loading. Verify no protected-action errors from native voice notifications.
 - [ ] Settings still read Portrait controls → Buttons / Quadrants. Existing bar art, exact-rank assignments, modifier groups, and compact/spaced cleanse arcs are unchanged.
 
+## Preview parity (0.10.1)
+
+- [ ] `/wpf test` while solo shows full sample surnames, assigned role/marker examples, crown/PvP/ready badges, shard/summon states, speaking and offline indicators, and low-health/threat warnings. The caption says Sample data. Neither portrait-control label changes.
+- [ ] Hover sample names/bars to see the same member-detail and aura-panel layout as live frames. Move into sample aura icons to read their names and sample tooltip; leaving or closing preview clears them. No real unit tooltip, cast, target, native menu, voice subscription, or shard transfer occurs.
+- [ ] With the native Show Party Pets preference enabled, the first sample has a pet row with health, threat, and debuff information. Disabling it hides that row and reclaims reserved spacing. Close/reopen preview and repeat in both Buttons and Quadrants styles.
+- [ ] Select a different preset, modifier layer, history duration, and control style. Preview retains those actual settings and their exact spell/rank choices while its sample identity/status stays visible. Preview must not create or change assignments.
+- [ ] Enter combat or join a party while sample aura details are open. All sample details disappear and live member status remains correct. Return to solo preview and verify indicators/tooltips restore with no stale state.
+
 ## Result
 
 - Client build:

@@ -1,5 +1,11 @@
 # Release history
 
+## 0.10.1 — connect preview to party information
+
+Fixed `/wpf test` omitting the native-information components added in 0.10.0. The offline renderer previously injected those separately, concealing the missing in-game preview connection. Both now consume one sample roster through the production component layout and common display painters. Sample surnames, roles/markers, presence/status badges, warnings, pet rows, and hover aura details are included; current presets and both portrait-control styles remain intact.
+
+Synthetic previews never bind fake units, create secure actions, register native pet/voice watchers, open transfer/member actions, or modify saved assignments. Ordinary sample aura controls share styling/geometry with the native controls, which still require real units in live play. Actual slash-command regression coverage checks missing indicators, hover details, settings/modifiers, cleanup, reopening, and party/combat transitions. Validation: 28 Lua syntax checks and 31 isolated suites, including the new `/wpf test` integration suite, plus Astra review after AGY Opus 5.5 exhausted its quota, and offline renders. Native engine behavior remains a client check.
+
 ## 0.10.0 — native party information
 
 Added Forever surname formatting, native member tooltips, phase/shard and summon indicators, leader/guide and PvP badges, ready checks, disconnect/dead/ghost treatment, low-health/threat warnings, native voice activity, and optional party pets. A hover panel exposes native aura overflow and dispel-colored borders. Portraits honor the native class-portrait preference. The existing Portrait controls labels remain Buttons and Quadrants.

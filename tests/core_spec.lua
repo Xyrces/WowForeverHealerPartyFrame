@@ -55,7 +55,7 @@ load("FrameVisuals")
 load("HealthPrediction")
 load("HealthHistory")
 load("HoverPrediction")
-load("Frames")
+load("MemberInfo"); load("PreviewData"); load("Frames")
 ns.PresetMenus = { Initialize=function() end, RefreshPrompts=function() end, Update=function() end }
 local minimapEntries = {}
 AddonCompartmentFrame = {RegisterAddon = function(_, entry)

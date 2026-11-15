@@ -236,7 +236,41 @@ UnitIsGroupLeader=nil;UnitIsPVP=nil;UnitIsPVPFreeForAll=nil;GetReadyCheckStatus=
 eq(S:Update(a,"party2"),true);eq(sa.leader:IsShown(),false);eq(sa.pvp:IsShown(),false)
 eq(sa.lowHolder.alpha,0);eq(sa.threat.alpha,0)
 local preview=card("party2");preview.previewIndex=1
+local tracked=0;for _ in pairs(S.cards) do tracked=tracked+1 end
 eq(S:Create(preview),true);eq(S:Update(preview,"party2"),false)
-eq(preview.partyStatus.leader:IsShown(),false,"preview does not invent an assigned leader")
+local afterCreate=0;for _ in pairs(S.cards) do afterCreate=afterCreate+1 end
+eq(afterCreate,tracked,"sample cards are not registered in live ready/voice lifecycle")
+local function noLiveRead() error("preview must not query live units or voice") end
+UnitExists,UnitHealthPercent,UnitThreatSituation,UnitGUID=noLiveRead,noLiveRead,noLiveRead,noLiveRead
+GetReadyCheckStatus,GetReadyCheckTimeLeft=noLiveRead,noLiveRead
+VoiceActivityManager={RegisterFrameForVoiceActivityNotifications=noLiveRead,UnregisterFrameForVoiceActivityNotifications=noLiveRead}
+local ps=preview.partyStatus
+local generation=S.readyGeneration
+local sample={leader=true,guide=true,pvp="FFA",readyState="ready",voice=true,health=20,healthMax=100,threat=3}
+eq(S:Preview(preview,sample),true)
+eq(ps.leader.atlas,"UI-HUD-UnitFrame-Player-Group-GuideIcon")
+eq(ps.pvp.atlas,"ui-hud-unitframe-player-pvp-ffaicon")
+eq(ps.ready.atlas,"UI-LFG-ReadyMark");eq(ps.ready.alpha,1)
+eq(ps.previewVoice.atlas,"voicechat-icon-speaker");eq(ps.previewVoice:IsShown(),true)
+eq(ps.voiceAnchor.alpha,1);eq(ps.voiceGUID,nil)
+eq(ps.lowHolder.alpha,1);eq(ps.threat.alpha,1)
+eq(preview.portrait.SetVertexColorArgs[2],.05)
+eq(S:GetTooltipLines(preview)[1],"Dungeon guide")
+eq(S.readyGeneration,generation);eq(next(S.finishedReady),nil)
+sample.connected=false;S:Preview(preview,sample)
+eq(preview.status:GetText(),"Offline");eq(ps.disconnect:IsShown(),true)
+eq(ps.previewVoice:IsShown(),false);eq(ps.ready:IsShown(),false)
+eq(ps.lowHolder.alpha,0);eq(ps.threat.alpha,0)
+sample.connected=true;sample.ghost=true;S:Preview(preview,sample)
+eq(preview.status:GetText(),"Ghost");eq(preview.portrait.SetVertexColorArgs[3],.75)
+sample.ghost=false;sample.dead=true;S:Preview(preview,sample)
+eq(preview.status:GetText(),"Dead");eq(preview.portrait.SetVertexColorArgs[1],.35)
+eq(S:Preview(a,sample),false,"sample writer cannot overwrite a live card")
+S:Clear(preview)
+eq(ps.leader:IsShown(),false);eq(ps.ready:IsShown(),false);eq(ps.previewVoice:IsShown(),false)
+eq(ps.voiceAnchor.alpha,0)
+S:Preview(preview,{})
+eq(ps.leader:IsShown(),false);eq(ps.pvp:IsShown(),false);eq(preview.status:GetText(),"")
+eq(ps.lowHolder.alpha,0);eq(ps.threat.alpha,0)
 eq(#ui.violations,0)
 print("party_status_spec: "..checks.." checks passed (native curve/voice behavior simulated)")

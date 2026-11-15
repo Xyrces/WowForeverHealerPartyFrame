@@ -50,7 +50,7 @@ local function unitOf(card)
     return public(unit,"string") and unit:match("^party[1-4]$") and unit or nil
 end
 function Presence:Create(card)
-    if card.presenceButton or ns.InCombat() or card.previewIndex then return end
+    if card.presenceButton or ns.InCombat() then return end
     local button=CreateFrame("Button",nil,card)
     card.presenceButton=button
     button:Hide(); button:SetSize(14,14)
@@ -59,13 +59,15 @@ function Presence:Create(card)
     button:RegisterForClicks("LeftButtonUp","RightButtonUp")
     button.icon=button:CreateTexture(nil,"ARTWORK"); button.icon:SetAllPoints(button)
     button:SetScript("OnEnter",function(self)
-        local unit=unitOf(card)
-        local info=unit and ns.MemberInfo:Get(unit,card.presetID)
+        local unit=not card.previewIndex and unitOf(card)
+        local info=card.previewIndex and card.previewInfo or unit and ns.MemberInfo:Get(unit,card.presetID)
         GameTooltip:SetOwner(self,"ANCHOR_RIGHT")
         if info then
             GameTooltip:SetText(info.presenceText or "Party member")
             GameTooltip:AddLine(info.presenceTooltip or "",.85,.85,.85,true)
-            if info.differentShard and Presence:CanConfirmTransfer() then
+            if card.previewIndex then
+                GameTooltip:AddLine("Sample data: no party actions or shard transfer.",1,.82,0,true)
+            elseif info.differentShard and Presence:CanConfirmTransfer() then
                 GameTooltip:AddLine("Click to confirm your pending shard transfer.",1,.82,0,true)
                 GameTooltip:AddLine("Uses the destination already offered by the server.",.8,.8,.8,true)
                 if ns.InCombat() then GameTooltip:AddLine("Available after combat.",1,.4,.3) end
@@ -75,6 +77,7 @@ function Presence:Create(card)
     end)
     button:SetScript("OnLeave",function() GameTooltip:Hide() end)
     button:SetScript("OnClick",function(_,mouse)
+        if card.previewIndex then return end
         local unit=unitOf(card)
         if not unit then return end
         local info=ns.MemberInfo:Get(unit,card.presetID)

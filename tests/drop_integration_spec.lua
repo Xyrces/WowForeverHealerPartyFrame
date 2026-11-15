@@ -31,7 +31,7 @@ ns.Rates = { Initialize = function() end, SetUnits = function() end, Tick = func
 ns.Auras = { GetDebuffs = function() return {}, true end,
     GetAssignedBuff = function() return { state = "missing" } end, Paint = function() end }
 load("FrameVisuals")
-load("Frames")
+load("MemberInfo"); load("PreviewData"); load("Frames")
 load("Settings")
 ns.PresetMenus = { Initialize=function() end, RefreshPrompts=function() end, Update=function() end }
 local minimapEntries = {}

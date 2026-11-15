@@ -159,9 +159,54 @@ eq(D:Show(second,"party1"),true)
 ns.worldActive=false;update(panel,0.01)
 eq(panel:IsShown(),false,"world transition closes native tooltips")
 ns.worldActive=true
-local preview=card();preview.previewIndex=1
-eq(D:Create(preview),false)
-eq(D:Show(preview,"party1"),false)
+local preview=CreateFrame("Frame",nil,UIParent);preview.previewIndex=1
+preview.portraitArea=CreateFrame("Frame",nil,preview)
+local originalApi,originalEnum=C_AuraContainerUtil,Enum
+C_AuraContainerUtil=nil;Enum=nil
+local previousContainers=#containers
+local oldExists=UnitExists
+UnitExists=function() error("preview must not query real units") end
+eq(D:Create(preview),true,"sample panel shares layout without native aura API")
+eq(#containers,previousContainers,"preview creates no native aura containers")
+local sample={helpful={{name="Fortitude",icon=1243,durationText="18m",stacks=2,description="Sample buff"}},
+    harmful={{name="Disease",icon=528,durationText="8s",dispelType="Disease",description="Sample debuff"}}}
+eq(D:Preview(preview,sample),true)
+eq(preview.previewAuras,sample)
+eq(D:Show(preview),true)
+local pp=D.previewPanelState
+local pi=pp.views[1].icons[1]
+eq(pp.frame:GetWidth(),panel:GetWidth(),"live and sample panel share width")
+eq(pp.frame:GetHeight(),panel:GetHeight(),"live and sample panel share height")
+eq(pp.frame.protected,false)
+eq(pp.frame.SetMouseClickEnabledArgs[1],true,"visible sample panel consumes clicks instead of targeting world")
+eq(panel.SetMouseClickEnabledArgs[1],false,"live aura panel retains native click-through behavior")
+eq(pp.frame:GetScript("OnClick"),nil,"sample click surface has no action handler")
+eq(pp.frame:GetAttribute("type1"),nil,"sample click surface has no secure action")
+eq(#pp.views[1].icons,16);eq(#pp.views[2].icons,8)
+eq(pi.sampleIcon.texture,1243);eq(pi.sampleTimer:GetText(),"18m");eq(pi.sampleCount:GetText(),"2")
+eq(pi.sampleBorder:IsShown(),false);eq(pp.views[2].icons[1].sampleBorder:IsShown(),true)
+eq(pi:GetScript("OnClick"),nil);eq(pi:GetAttribute("type1"),nil)
+eq(pi.SetMouseClickEnabledArgs[1],false)
+eq(pp.views[1].icons[2]:IsShown(),false,"unused sample slots remain hidden")
+eq(preview.auraDetailsBorder.views[1].holder:IsShown(),true)
+eq(preview.auraDetailsBorder.views[1].rim.SetVertexColorArgs[1],.6,"disease portrait border uses sample color")
+GameTooltip.GetOwner=function(self) return self.SetOwnerArgs and self.SetOwnerArgs[1] end
+pi:GetScript("OnEnter")(pi)
+eq(GameTooltip:GetText(),"Fortitude")
+eq(GameTooltip.AddLineArgs[1]:find("Sample data",1,true)~=nil,true)
+pi:GetScript("OnLeave")(pi);eq(GameTooltip:IsShown(),false)
+ui.hover=preview;pp.frame:GetScript("OnUpdate")(pp.frame,.1)
+eq(pp.frame:IsShown(),true,"sample panel does not need a live unit to stay open")
+ui.hover=nil;pp.frame:GetScript("OnUpdate")(pp.frame,.3)
+eq(pp.frame:IsShown(),false,"sample panel uses live leave grace")
+D:Show(preview);D:Clear(preview)
+eq(pp.frame:IsShown(),false);eq(preview.auraDetailsBorder.views[1].holder:IsShown(),false)
+D:Preview(preview,{helpful={},harmful={}});D:Show(preview)
+eq(pp.views[1].icons[1]:IsShown(),false,"sample changes clear prior icon")
+eq(preview.auraDetailsBorder.views[1].holder:IsShown(),false)
+UnitExists=oldExists;C_AuraContainerUtil=originalApi;Enum=originalEnum
+D:Show(second,"party1")
+eq(pp.frame:IsShown(),false,"live tooltip replaces sample panel")
 eq(D:Show(first,secret),false,"opaque unit cannot enter native binding")
 failInitialize=true
 local broken=card();D:Create(broken)

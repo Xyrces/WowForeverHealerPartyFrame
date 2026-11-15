@@ -125,17 +125,11 @@ if RENDER_HOVER then
     load("SpellEstimates"); load("HoverPrediction")
 end
 load("FrameVisuals")
-if RENDER_PARITY then
-    GetCVarBool=function(name) return name=="showPartyPets" end
-    RegisterUnitWatch=function(frame)
-        frame.unitWatch=true
-        local owner=frame.parent:GetAttribute("unit")
-        local unit=owner and owner:gsub("^party([1-4])$","partypet%1")
-        frame.shown=unit~=nil and state.units[unit]~=nil
-    end
-    UnregisterUnitWatch=function(frame) frame.unitWatch=false end
-    load("MemberInfo"); load("PartyPresence"); load("PartyStatus"); load("PartyPets")
-end
+-- The render uses the shipped /wpf test path. --parity only enables the
+-- native pet preference; it never replaces preview identity with live units.
+GetCVarBool=function(name) return RENDER_PARITY and name=="showPartyPets" end
+load("MemberInfo"); load("PreviewData")
+load("PartyPresence"); load("PartyStatus"); load("PartyPets"); load("AuraDetails")
 if RENDER_CLEANSES then
     -- Public sample actions only: Preview never creates native aura controls
     -- or configures secure casting. Spell art is mapped from saved mock assets.
@@ -170,101 +164,18 @@ if RENDER_CLEANSES then
 end
 for index,card in ipairs(p.cards) do card.renderClass=({"WARRIOR","MAGE","DRUID","ROGUE"})[index] end
 if RENDER_HOVER then
-    local cases={
-        {2050,"Hover fixture: direct 650"},
-        {139,"Hover fixture: HoT 500 / 15s",1300},
-        {2061,RENDER_HISTORY and "Hover fixture: shield 700" or "Hover fixture: shield 700 at full HP"},
-        {2052,"Hover fixture: direct 200 + HoT 500",1700},
-    }
+    -- Exercise the assigned control in each existing sample. Never rewrite
+    -- sample health or spell assignments after the production preview opens.
     for index,card in ipairs(p.cards) do
-        local case=cases[index]
-        card.memberInfo:SetText(case[2])
-        local health=case[3] or (index==3 and card.previewHealthMax)
-        if health then
-            card.health:SetValue(health)
-            card.health.text:SetFormattedText("%d / %d",health,card.previewHealthMax)
-        end
-        local button=card.heals[1]
-        button.spellID=case[1]
-        assert(ns.HoverPrediction:Show(button,nil,card.previewHealthMax),"Hover fixture failed")
+        local button=card.heals[index]
+        assert(ns.HoverPrediction:Show(button,nil,card.previewHealthMax),"Assigned preview heal could not render")
     end
 end
-if RENDER_HISTORY then
-    -- Public layout fixtures span the accepted gradient. Refresh every layer
-    -- after overriding HP so the history endpoint and prediction agree.
-    for index,card in ipairs(p.cards) do
-        local percent=({95,70,45,15})[index]
-        local maximum=card.previewHealthMax
-        local health=math.floor(maximum*percent/100)
-        card.health:SetValue(health)
-        card.health.text:SetFormattedText("%d / %d",health,maximum)
-        if not RENDER_HOVER then card.memberInfo:SetText("History fixture: "..percent.."% HP") end
-        if RENDER_PREDICTIONS then
-            ns.HealthPrediction:Preview(card,{health=health,healthMax=maximum,
-                totalIncomingHeals=200,totalIncomingHealsFromHealer=150,
-                totalDamageAbsorbs=100,totalHealAbsorbs=0})
-        end
-        ns.HealthHistory:Preview(card,health,maximum,3)
-        if RENDER_HOVER then
-            assert(ns.HoverPrediction:Show(card.heals[1],nil,maximum),"History hover fixture failed")
-        end
-    end
-end
-if RENDER_PARITY then
-    -- Invented public states exercise production layout. There is no client
-    -- connection: native badges are symbolic offline approximations below.
-    local members={
-        {name="Thorin",realm="Stoneheart",class="WARRIOR",guid="sample-one",leader=true,pvp=true,ready="ready",role="TANK",phase=1},
-        {name="Lyra",realm="Silvermoon",class="MAGE",guid="sample-two",ready="waiting",role="DAMAGER",phase=2},
-        {name="Elowen",realm="Moonwhisperlongsurname",class="DRUID",guid="sample-three",connected=false,role="HEALER"},
-        {name="Kael",realm="Nightwind",class="ROGUE",guid="sample-four",ghost=true,ready="notready",role="DAMAGER"},
-    }
-    state.units.player={name="Priest",realm="Dawnlight",class="PRIEST",guid="sample-player"}
-    for index,member in ipairs(members) do state.units["party"..index]=member end
-    state.units.partypet1={name="Companion",health=420,maxHealth=600}
-    local function value(unit,key,default)
-        local unitData=state.units[unit]
-        if unitData and unitData[key]~=nil then return unitData[key] end
-        return default
-    end
-    NameUtil={FormatUnitNameForDisplay=function(unit)
-        local name,surname=UnitName(unit)
-        return surname and name.." "..surname or name
-    end}
-    UnitLevel=function() return 24 end
-    UnitGroupRolesAssigned=function(unit) return value(unit,"role","NONE") end
-    UnitIsConnected=function(unit) return value(unit,"connected",true) end
-    UnitIsGroupLeader=function(unit) return value(unit,"leader",false) end
-    UnitIsPVP=function(unit) return value(unit,"pvp",false) end
-    UnitIsPVPFreeForAll=function() return false end
-    UnitFactionGroup=function() return "Alliance" end
-    UnitIsDead=function(unit) return value(unit,"dead",false) end
-    UnitIsGhost=function(unit) return value(unit,"ghost",false) end
-    UnitIsDeadOrGhost=function(unit) return UnitIsDead(unit) or UnitIsGhost(unit) end
-    UnitPhaseReason=function(unit) return value(unit,"phase") end
-    GetReadyCheckStatus=function(unit) return value(unit,"ready") end
-    GetReadyCheckTimeLeft=function() return 20 end
-    Enum=Enum or {};Enum.PhaseReason={Sharding=1,RuleSet=2}
-    PartyUtil={GetPhasedReasonString=function(reason) return reason==1 and "Member is on another shard." or "Member uses another ruleset." end}
-    ns.PartyStatus.readyActive=true;ns.PartyStatus.readyGeneration=1
-    for index,card in ipairs(p.cards) do
-        local unit="party"..index
-        card.previewIndex=nil
-        card:SetAttribute("unit",unit)
-        ns.MemberInfo:PaintName(card.name,unit)
-        local info=ns.MemberInfo:Get(unit,card.presetID)
-        card.memberInfo:SetText(info.summary)
-        ns.Visuals:PaintIdentityIcons(card,info.roleToken,info.markerIndex)
-        ns.PartyPresence:Create(card);ns.PartyPresence:Update(card,info)
-        ns.PartyStatus:Create(card);ns.PartyStatus:Update(card,unit)
-        ns.PartyPets:Create(card);ns.PartyPets:Update(card)
-        card.name:SetWidth(card.status:GetText()~="" and ns.Layout.barWidth-40 or ns.Layout.barWidth)
-        card.previewIndex=index
-    end
-    ns.Frames:LayoutCards()
-    RENDER_SCENE_H=math.max(680,math.ceil(ns.Frames.anchor:GetHeight()+120))
-    UIParent:SetSize(850,RENDER_SCENE_H)
-end
+-- Health-history and native-prediction samples were painted by TogglePreview
+-- and its ordinary refresh path; there are no renderer-only data overrides.
+-- Size the capture from actual production preview layout, including pets.
+RENDER_SCENE_H=math.max(680,math.ceil(ns.Frames.anchor:GetHeight()+120))
+UIParent:SetSize(850,RENDER_SCENE_H)
 for index,obj in ipairs(state.objects) do obj.renderID=index end
 for _,obj in ipairs(state.objects) do
  if obj.format and obj.formatValues then obj.renderText=string.format(obj.format,unpack(obj.formatValues))
@@ -386,6 +297,16 @@ def main():
             "roleicon-tiny-dps":("D",(230,150,70)),
             "ui-phasingicon":("S",(180,150,240)),
             "disconnect-icon":("!",(150,150,150)),
+            "Raid-Icon-SummonPending":("S",(215,175,245)),
+            "Raid-Icon-SummonAccepted":("S",(115,235,150)),
+            "Raid-Icon-SummonDeclined":("S",(235,100,100)),
+            "voicechat-icon-speaker":("V",(115,225,120)),
+            "ability_hunter_pet_bear":("B",(190,150,100)),
+            "spell_nature_corrosivebreath":("P",(100,210,90)),
+            "spell_nature_nullifydisease":("D",(190,160,85)),
+            "spell_shadow_shadowwordpain":("M",(195,105,230)),
+            "raid-marker-star":("*",(250,220,60)),
+            "raid-marker-moon":("C",(205,210,245)),
         }
         if name not in marks:return None
         approximations.add(name)
@@ -410,7 +331,7 @@ def main():
                 for px in range(W):
                     opacity=round(185*max(0,1-abs(px-W*.5)/(W*.5)))
                     td.line((px,0,px,H),fill=tint+(opacity,))
-            elif "--parity" in sys.argv and obj.atlas and badge(str(obj.atlas),W,H) is not None:
+            elif obj.atlas and badge(str(obj.atlas),W,H) is not None:
                 tile=badge(str(obj.atlas),W,H)
             elif obj.portraitUnit is not None and atlas:
                 anc=parent(obj)
@@ -420,6 +341,8 @@ def main():
             elif obj.texture:
                 texture_path=str(obj.texture).replace("\\","/")
                 name=texture_path.split("/")[-1].split(".")[0].lower()
+                if name=="ui-raidtargetingicons" and obj.spriteCell:
+                    name="raid-marker-moon" if obj.spriteCell[1]==5 else "raid-marker-star"
                 path=files.get(name)
                 prefix="Interface/AddOns/WowfPartyFrames/Media/"
                 if texture_path.startswith(prefix):
@@ -440,7 +363,7 @@ def main():
                         quad=tuple(value for i in (0,1,3,2) for value in points[i])
                         tile=tile.transform((W,H),Image.Transform.QUAD,quad,Image.Resampling.BICUBIC)
                     tile=tile.resize((W,H),Image.Resampling.LANCZOS)
-                elif "--parity" in sys.argv and badge(name,W,H) is not None:tile=badge(name,W,H)
+                elif badge(name,W,H) is not None:tile=badge(name,W,H)
                 elif "statusbar" in name or "white" in name:tile=Image.new("RGBA",(W,H),(255,255,255,255))
                 elif name=="shield-overlay":
                     tile=Image.new("RGBA",(W,H),(0,0,0,0));td=ImageDraw.Draw(tile)
@@ -534,12 +457,12 @@ def main():
     caption="OFFLINE LUA LAYOUT · native trim + spell art · preview class icons; live frames use portraits"
     if "--hover" in sys.argv: caption="OFFLINE HOVER STRIPS · invented test spell amounts · actual 2px addon geometry; artwork approximated"
     if "--history" in sys.argv:
-        caption="OFFLINE HEALTH HISTORY · 95%, 70%, 45%, 15% fixtures · 12px history"
+        caption="OFFLINE HEALTH HISTORY · shipped /wpf test samples · 12px history"
         if "--hover" in sys.argv: caption += " + 2px hover overlay"
     if "--cleanses" in sys.argv:
         caption="OFFLINE RADIAL CLEANSES · actual Lua geometry and TGA art · sample alerts; not game casting"
     if "--parity" in sys.argv:
-        caption="OFFLINE PARTY PARITY · actual addon layout · invented member states; native badges approximated"
+        caption="OFFLINE /wpf test · shipped member samples and layout; spell estimates and art approximated"
     draw.text((round(22*SCALE),round(18*SCALE)),caption,font=ImageFont.truetype("C:/Windows/Fonts/arial.ttf",round(12*SCALE)),fill=(210,210,205))
     draw.text((round(22*SCALE),canvas.height-round(25*SCALE)),"Actual addon geometry; fonts, patterns, glows and cooldowns approximated. Not an in-game screenshot.",font=ImageFont.truetype("C:/Windows/Fonts/arial.ttf",round(10*SCALE)),fill=(165,165,160))
     suffix = "-radial" if "--cleanses" in sys.argv else ""

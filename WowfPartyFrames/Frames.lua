@@ -73,13 +73,13 @@ end
 -- unit on every refresh so a party reorder cannot leave another member's details.
 local function updateMemberTooltip(self)
     openTooltip(self)
-    local unit=unitOf(self)
+    local unit=not self.previewIndex and unitOf(self) or nil
     local native = false
     if unit and type(GameTooltip.SetUnit) == "function" then
         local ok, hasTooltip = pcall(GameTooltip.SetUnit, GameTooltip, unit)
         native = ok and public(hasTooltip, "boolean") and hasTooltip
     end
-    local details = ns.MemberInfo and ns.MemberInfo:Get(unit, self.presetID)
+    local details = self.previewInfo or (ns.MemberInfo and ns.MemberInfo:Get(unit, self.presetID))
     if not native then GameTooltip:SetText(details and details.displayName or self.memberName or "Party member") end
     if details and details.summary ~= "" then GameTooltip:AddLine(details.summary, 0.85, 0.85, 0.8) end
     if details and details.location then GameTooltip:AddLine("Location: " .. details.location, 0.7, 0.8, 1) end
@@ -89,7 +89,11 @@ local function updateMemberTooltip(self)
     end
     local preset = ns.Profiles:GetPreset(self.presetID)
     GameTooltip:AddLine("Preset: " .. (preset and preset.name or "Default"), 1, 0.82, 0)
-    GameTooltip:AddLine("Left-click to target. Right-click to assign a preset or open party actions.", 0.85, 0.85, 0.85, true)
+    if self.previewIndex then
+        GameTooltip:AddLine("Sample data only. No targeting, casting, or party actions.", 1, .65, .25, true)
+    else
+        GameTooltip:AddLine("Left-click to target. Right-click to assign a preset or open party actions.", .85, .85, .85, true)
+    end
     if self.healthPrediction and self.healthPrediction.supported then
         GameTooltip:AddLine("Health bar: incoming heals extend the fill; shields use a light pattern; healing absorption covers health. Edge glows indicate overflow.", 0.75, 0.9, 0.9, true)
     end
@@ -236,7 +240,11 @@ local function decorateControls(card, preview)
             openTooltip(self)
             local setter = self.auraFilter == "HARMFUL" and GameTooltip.SetUnitDebuffByAuraInstanceID
                 or GameTooltip.SetUnitBuffByAuraInstanceID
-            if unit and self.auraInstanceID and setter then
+            if preview and self.previewAura then
+                GameTooltip:SetText(self.previewAura.name)
+                GameTooltip:AddLine(self.previewAura.description or "",.85,.85,.85,true)
+                GameTooltip:AddLine("Sample data only.",1,.65,.25)
+            elseif unit and self.auraInstanceID and setter then
                 local ok = pcall(setter, GameTooltip, unit, self.auraInstanceID)
                 if not ok then GameTooltip:SetText("Aura details unavailable") end
             else
@@ -250,10 +258,10 @@ local function decorateControls(card, preview)
     if not preview and ns.AuraDisplay then ns.AuraDisplay:Create(card) end
     if not preview and ns.HealAuraDisplay then ns.HealAuraDisplay:Create(card) end
     if not preview and ns.CleanseDisplay then ns.CleanseDisplay:Create(card) end
-    if not preview and ns.PartyPresence then ns.PartyPresence:Create(card) end
-    if not preview and ns.PartyStatus then ns.PartyStatus:Create(card) end
-    if not preview and ns.PartyPets then ns.PartyPets:Create(card) end
-    if not preview and ns.AuraDetails then ns.AuraDetails:Create(card) end
+    if ns.PartyPresence then ns.PartyPresence:Create(card) end
+    if ns.PartyStatus then ns.PartyStatus:Create(card) end
+    if ns.PartyPets then ns.PartyPets:Create(card) end
+    if ns.AuraDetails then ns.AuraDetails:Create(card) end
     card:HookScript("OnHide", function(self)
         leaveMemberTooltip(self)
         if Frames.tooltipButton and Frames.tooltipButton.card == self then hideTooltip() end
@@ -333,6 +341,7 @@ local function applyCardProfile(card)
     if not card.previewIndex and ns.PartyPets then ns.PartyPets:Configure(card) end
     ns.Visuals:ApplyControlStyle(card)
     paintHealing(card)
+    if card.previewIndex then Frames:RefreshPreviewCard(card) end
 end
 
 function Frames:LayoutCards(count)
@@ -610,22 +619,26 @@ function Frames:RefreshRoster()
     return true
 end
 
+local function paintResourceValues(card, hp, maxHP, current, maximum, color)
+    card.health:SetMinMaxValues(0, maxHP)
+    card.health:SetValue(hp)
+    card.health.text:SetFormattedText("%d / %d", hp, maxHP)
+    card.power:SetMinMaxValues(0, maximum)
+    card.power:SetValue(current)
+    card.power.text:SetFormattedText("%d / %d", current, maximum)
+    if color then card.power:SetStatusBarColor(color.r, color.g, color.b) end
+end
+
 local function paintResources(card, unit)
     -- Secret resource values go directly to permitted display setters. Never
     -- compare, divide, round, or concatenate these values in addon code.
     local hp, maxHP = UnitHealth(unit, false), UnitHealthMax(unit)
-    card.health:SetMinMaxValues(0, maxHP)
-    card.health:SetValue(hp)
-    card.health.text:SetFormattedText("%d / %d", hp, maxHP)
     local power, powerToken = UnitPowerType(unit)
     if not public(power, "number") then power, powerToken = 0, "MANA" end
     if not public(powerToken, "string") then powerToken = "MANA" end
     local current, maximum = UnitPower(unit, power), UnitPowerMax(unit, power)
-    card.power:SetMinMaxValues(0, maximum)
-    card.power:SetValue(current)
-    card.power.text:SetFormattedText("%d / %d", current, maximum)
     local color = PowerBarColor and (PowerBarColor[powerToken] or PowerBarColor[power]) or {r=0.12,g=0.35,b=0.88}
-    if color then card.power:SetStatusBarColor(color.r, color.g, color.b) end
+    paintResourceValues(card,hp,maxHP,current,maximum,color)
     local connected, dead = UnitIsConnected(unit), UnitIsDeadOrGhost(unit)
     local statusText=public(connected) and connected == false and "Offline"
         or public(dead) and dead and "Dead" or ""
@@ -690,6 +703,29 @@ local function paintAuras(card, unit)
     end
 end
 
+function Frames:PaintMemberInfo(card, info)
+    card.memberInfo:SetText(info.summary)
+    card.presetLabel:SetText("Preset: " .. info.preset)
+    card.location:SetText(info.location or "")
+    if ns.PartyPresence then ns.PartyPresence:Update(card,info) end
+    ns.Visuals:PaintIdentityIcons(card,info.roleToken,info.markerIndex)
+end
+
+function Frames:RefreshPreviewCard(card)
+    local sample=card.previewSample
+    if not card.previewIndex or not sample then return end
+    local info=ns.PreviewData:GetInfo(sample,card.presetID)
+    card.previewInfo=info
+    card.name:SetText(info.displayName)
+    self:PaintMemberInfo(card,info)
+    paintResourceValues(card,sample.health,sample.healthMax,sample.power,sample.powerMax,
+        PowerBarColor and PowerBarColor[sample.powerToken])
+    if ns.PartyStatus then ns.PartyStatus:Preview(card,sample.status) end
+    card.name:SetWidth(card.status:GetText()~="" and L.barWidth-40 or L.barWidth)
+    if ns.PartyPets then ns.PartyPets:Preview(card,sample.pet) end
+    if ns.AuraDetails then ns.AuraDetails:Preview(card,sample.auras) end
+end
+
 function Frames:RefreshAll(refreshAuras)
     for _, card in ipairs(self.cards) do
         local unit = unitOf(card)
@@ -712,11 +748,7 @@ function Frames:RefreshAll(refreshAuras)
             if ns.MemberInfo and (not card.nextInfoUpdate or now >= card.nextInfoUpdate
                 or card.infoUnit ~= unit or card.infoPreset ~= card.presetID) then
                 local info = ns.MemberInfo:Get(unit, card.presetID)
-                card.memberInfo:SetText(info.summary)
-                card.presetLabel:SetText("Preset: " .. info.preset)
-                card.location:SetText(info.location or "")
-                if ns.PartyPresence then ns.PartyPresence:Update(card,info) end
-                ns.Visuals:PaintIdentityIcons(card, info.roleToken, info.markerIndex)
+                self:PaintMemberInfo(card,info)
                 card.infoUnit, card.infoPreset, card.nextInfoUpdate = unit, card.presetID, now + 1
             end
             if refreshAuras then paintAuras(card, unit) end
@@ -742,6 +774,7 @@ function Frames:RefreshAll(refreshAuras)
                 ns.HealthHistory:Preview(card, card.previewHealth, card.previewHealthMax)
             end
             ns.Visuals:SetPortraitHover(card, portraitHovered(card))
+            self:RefreshPreviewCard(card)
         end
     end
     if self.tooltipButton then updateHover(self.tooltipButton) end
@@ -847,6 +880,7 @@ function Frames:TogglePreview()
     if self.preview then
         self.preview:SetShown(not self.preview:IsShown())
         self:LayoutCards()
+        if self.preview:IsShown() then self:RefreshAll(true) end
         return true
     end
     local preview = CreateFrame("Frame", "WowfPartyFramesPreview", self.anchor)
@@ -856,49 +890,49 @@ function Frames:TogglePreview()
     preview.title = title
     title:SetPoint("TOPLEFT", preview, "BOTTOMLEFT", L.barX, -7)
     title:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 9, "OUTLINE")
-    title:SetText("Preview  |  /wpf test to close")
+    title:SetText("Sample data  |  /wpf test to close")
     preview.cards = {}
-    local samples = {
-        {"Thorin", "WARRIOR", 3240, 4500, 62, 100, "Rage", 650, 400, 450, 0},
-        {"Lyra", "MAGE", 2100, 2100, 2800, 3600, "Mana", 0, 0, 600, 0},
-        {"Elowen", "DRUID", 2410, 2800, 1920, 3100, "Mana", 100, 100, 0, 700},
-        {"Kael", "ROGUE", 2180, 2600, 80, 100, "Energy", 150, 0, 180, 0},
-    }
+    preview:SetScript("OnHide",function()
+        for _,card in ipairs(preview.cards) do
+            leaveMemberTooltip(card)
+            if ns.PartyStatus then ns.PartyStatus:Clear(card) end
+            if ns.PartyPresence then ns.PartyPresence:Clear(card) end
+            if ns.PartyPets then ns.PartyPets:Clear(card) end
+            if ns.AuraDetails then ns.AuraDetails:Clear(card) end
+        end
+        if self.tooltipButton and self.tooltipButton.preview then hideTooltip() end
+    end)
+    local samples = ns.PreviewData.samples
     for index, sample in ipairs(samples) do
         local card = CreateFrame("Frame", nil, preview)
-        card.classToken, card.previewIndex = sample[2], index
+        card.classToken, card.previewIndex, card.previewSample = sample.classToken, index, sample
         card:SetPoint("TOPLEFT", 0, -(index - 1) * L.pitch)
         decorateControls(card, true)
         preview.cards[index] = card
-        local color = colorFor(sample[2])
-        card.name:SetText(sample[1]); card.name:SetTextColor(color.r, color.g, color.b)
-        local className = sample[2]
-        for _, class in ipairs(ns.CLASSES) do if class.token == sample[2] then className = class.name; break end end
-        card.memberInfo:SetText("24 " .. className)
-        card.location:SetText(index == 4 and "Westfall" or "")
+        card:EnableMouse(true)
+        card:SetScript("OnEnter",function(self)
+            self.UpdateTooltip=updateMemberTooltip
+            updateMemberTooltip(self)
+        end)
+        card:SetScript("OnLeave",leaveMemberTooltip)
+        local color = colorFor(sample.classToken)
+        card.name:SetTextColor(color.r, color.g, color.b)
         card.portrait:SetTexture("Interface\\TargetingFrame\\UI-Classes-Circles")
-        local coords = CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[sample[2]]
+        local coords = CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[sample.classToken]
         if coords then card.portrait:SetTexCoord(unpack(coords)) end
-        card.health:SetMinMaxValues(0, sample[4]); card.health:SetValue(sample[3])
-        card.previewHealthMax = sample[4]
-        card.previewHealth = sample[3]
-        if ns.HealthHistory then ns.HealthHistory:Preview(card, sample[3], sample[4], GetTime()) end
-        card.health.text:SetFormattedText("%d / %d", sample[3], sample[4])
-        if ns.HealthPrediction then
-            ns.HealthPrediction:Preview(card, {health=sample[3], healthMax=sample[4],
-                totalIncomingHeals=sample[8], totalIncomingHealsFromHealer=sample[9],
-                totalDamageAbsorbs=sample[10], totalHealAbsorbs=sample[11]})
-        end
-        card.power:SetMinMaxValues(0, sample[6]); card.power:SetValue(sample[5])
-        card.power.text:SetFormattedText("%d / %d", sample[5], sample[6])
-        local powerColor = PowerBarColor and PowerBarColor[sample[7]:upper()]
-        if powerColor then card.power:SetStatusBarColor(powerColor.r, powerColor.g, powerColor.b) end
+        card.previewHealthMax,card.previewHealth = sample.healthMax,sample.health
+        if ns.HealthHistory then ns.HealthHistory:Preview(card, sample.health, sample.healthMax) end
+        if ns.HealthPrediction then ns.HealthPrediction:Preview(card, sample) end
+        -- Only invented numeric health enters the sample status painter.
+        sample.status.health,sample.status.healthMax=sample.health,sample.healthMax
         applyCardProfile(card)
         for slot, button in ipairs(card.debuffs) do
-            button:SetShown(slot == 1)
-            if slot == 1 then
-                button.icon:SetTexture("Interface\\Icons\\Spell_Holy_AshesToAshes")
-                button.timer:SetText("12")
+            local aura=sample.auras.harmful[slot]
+            button.previewAura=aura
+            button:SetShown(aura~=nil)
+            if aura then
+                button.icon:SetTexture(aura.icon)
+                button.timer:SetText(aura.durationText or "")
             end
         end
         ns.Visuals:SetPortraitHover(card, false)

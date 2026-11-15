@@ -47,13 +47,8 @@ local function createThreat(state)
         return curve
     end)
 end
-local function updateThreat(state,unit)
-    state.threat:SetAlpha(0)
-    local dead,ghost=call(UnitIsDead,unit),call(UnitIsGhost,unit)
-    if public(dead,"boolean") and dead or public(ghost,"boolean") and ghost then return end
-    local enabled=call(IsThreatWarningEnabled)
-    if not public(enabled,"boolean") or not enabled or not state.threatCurve then return end
-    local threat=call(UnitThreatSituation,unit)
+local function paintThreat(state,threat)
+    if not state.threatCurve then return end
     if type(threat)=="number" or ns.IsSecret(threat) then
         pcall(function()
             local r,g,b,a=state.threatCurve:Evaluate(threat):GetRGBA()
@@ -61,6 +56,66 @@ local function updateThreat(state,unit)
         end)
     end
 end
+local function updateThreat(state,unit)
+    state.threat:SetAlpha(0)
+    local dead,ghost=call(UnitIsDead,unit),call(UnitIsGhost,unit)
+    if public(dead,"boolean") and dead or public(ghost,"boolean") and ghost then return end
+    local enabled=call(IsThreatWarningEnabled)
+    if not public(enabled,"boolean") or not enabled or not state.threatCurve then return end
+    paintThreat(state,call(UnitThreatSituation,unit))
+end
+local function paintHealth(state,hp,maximum)
+    -- Both live opaque values and public samples use the same native setters.
+    if type(hp)=="number" and type(maximum)=="number" then
+        state.health:SetMinMaxValues(0,maximum); state.health:SetValue(hp)
+        state.text:SetFormattedText("%d / %d",hp,maximum)
+    else
+        state.health:SetMinMaxValues(0,1); state.health:SetValue(0); state.text:SetText("")
+    end
+end
+local function initializeAura(button,preview)
+    button:SetSize(14,14)
+    button:SetMouseClickEnabled(false); button:SetMouseMotionEnabled(true)
+    if not preview then button:SetHideTooltipInCombat(false) end
+    local icon=button:CreateTexture(nil,"ARTWORK")
+    icon:SetAllPoints(button); icon:SetTexCoord(.07,.93,.07,.93)
+    if not preview then button:SetIcon(icon) end
+    local cooldown=CreateFrame("Cooldown",nil,button,"CooldownFrameTemplate")
+    cooldown:SetAllPoints(button); cooldown:SetDrawEdge(false); cooldown:SetDrawBling(false)
+    cooldown:SetHideCountdownNumbers(true); cooldown:EnableMouse(false)
+    if not preview then button:SetDurationCooldown(cooldown) end
+    local overlay=CreateFrame("Frame",nil,button)
+    overlay:SetAllPoints(button); overlay:SetFrameLevel(cooldown:GetFrameLevel()+2)
+    overlay:EnableMouse(false)
+    local border=overlay:CreateTexture(nil,"OVERLAY")
+    border:SetTexture("Interface\\Buttons\\UI-Debuff-Overlays")
+    border:SetTexCoord(.296875,.5703125,0,.515625);border:SetAllPoints(button)
+    if not preview then
+        button:AddDispelTypeTexture(border,{showWhenHarmful=true,showWhenHelpful=false,
+            showWithoutDispelType=true,style=Enum.CustomAuraButtonDispelTypeTextureStyle.PreserveAsset})
+    end
+    local timer=overlay:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
+    timer:SetFont(FONT,7,"OUTLINE"); timer:SetPoint("BOTTOM",button,"BOTTOM",0,-1)
+    if not preview then button:SetDurationText(timer) end
+    local count=overlay:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
+    count:SetFont(FONT,7,"OUTLINE"); count:SetPoint("TOPRIGHT",button,"TOPRIGHT",0,0)
+    if not preview then button:SetApplicationCount(count) end
+    if preview then
+        button.sampleIcon,button.sampleBorder,button.sampleTimer,button.sampleCount=icon,border,timer,count
+        button:SetScript("OnEnter",function(self)
+            local aura=self.sampleAura
+            if not aura then return end
+            GameTooltip:SetOwner(self,"ANCHOR_RIGHT");GameTooltip:SetText(aura.name or "Sample pet debuff")
+            if aura.description then GameTooltip:AddLine(aura.description,.85,.85,.85,true) end
+            GameTooltip:AddLine("Sample data - preview only.",1,.82,0,true);GameTooltip:Show()
+        end)
+        local function clear(self)
+            if GameTooltip.GetOwner and GameTooltip:GetOwner()==self then GameTooltip:Hide() end
+        end
+        button:SetScript("OnLeave",clear);button:SetScript("OnHide",clear)
+    end
+end
+
 local function createAuras(state)
     if not C_AuraContainerUtil then return end
     state.containers={}
@@ -82,32 +137,7 @@ local function createAuras(state)
             maxFrameCount=4,
             sortMethod=AuraContainerSortMethod.UnitFrameDebuff,
             layout={elementWidth=14,elementHeight=14,elementSpacing=1,lineSpacing=0},
-            initializeFrame=function(button)
-                button:SetSize(14,14)
-                button:SetMouseClickEnabled(false); button:SetMouseMotionEnabled(true)
-                button:SetHideTooltipInCombat(false)
-                local icon=button:CreateTexture(nil,"ARTWORK")
-                icon:SetAllPoints(button); icon:SetTexCoord(.07,.93,.07,.93)
-                button:SetIcon(icon)
-                local border=button:CreateTexture(nil,"OVERLAY")
-                border:SetTexture("Interface\\Buttons\\UI-Debuff-Overlays")
-                border:SetTexCoord(.296875,.5703125,0,.515625);border:SetAllPoints(button)
-                button:AddDispelTypeTexture(border,{showWhenHarmful=true,showWhenHelpful=false,
-                    showWithoutDispelType=true,style=styles.PreserveAsset})
-                local cooldown=CreateFrame("Cooldown",nil,button,"CooldownFrameTemplate")
-                cooldown:SetAllPoints(button); cooldown:SetDrawEdge(false); cooldown:SetDrawBling(false)
-                cooldown:SetHideCountdownNumbers(true); cooldown:EnableMouse(false)
-                button:SetDurationCooldown(cooldown)
-                local overlay=CreateFrame("Frame",nil,button)
-                overlay:SetAllPoints(button); overlay:SetFrameLevel(cooldown:GetFrameLevel()+2)
-                overlay:EnableMouse(false)
-                local timer=overlay:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
-                timer:SetFont(FONT,7,"OUTLINE"); timer:SetPoint("BOTTOM",button,"BOTTOM",0,-1)
-                button:SetDurationText(timer)
-                local count=overlay:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
-                count:SetFont(FONT,7,"OUTLINE"); count:SetPoint("TOPRIGHT",button,"TOPRIGHT",0,0)
-                button:SetApplicationCount(count)
-            end,
+            initializeFrame=function(button) initializeAura(button,false) end,
         })
         end
     end)
@@ -120,24 +150,28 @@ local function createAuras(state)
 end
 function Pets:Create(card)
     if card.partyPet then return card.partyPet.supported end
-    if ns.InCombat() or card.previewIndex then return false end
-    local state={supported=false,enabled=false}
+    if ns.InCombat() then return false end
+    local preview=card.previewIndex~=nil
+    local state={supported=false,enabled=false,preview=preview}
     card.partyPet=state
-    if type(RegisterUnitWatch)~="function" or type(UnregisterUnitWatch)~="function" then
+    if not preview and (type(RegisterUnitWatch)~="function" or type(UnregisterUnitWatch)~="function") then
         state.reason="Native pet unit watching is unavailable."; return false
     end
     local ok,reason=pcall(function()
-        local button=CreateFrame("Button",nil,card,"SecureActionButtonTemplate")
+        local button=CreateFrame("Button",nil,card,not preview and "SecureActionButtonTemplate" or nil)
         state.button=button
         button:Hide(); button:SetSize(174,18)
         button:SetPoint("TOPLEFT",card,"TOPLEFT",5,-130)
-        button:SetAttribute("useparent-unit",true); button:SetAttribute("unitsuffix","pet")
-        button:SetAttribute("type1","target"); button:SetAttribute("*type1","target")
-        button:SetAttribute("type2","togglemenu"); button:SetAttribute("*type2","togglemenu")
-        button:SetAttribute("useOnKeyDown",false)
-        button:SetAttribute("checkselfcast",false); button:SetAttribute("checkfocuscast",false)
-        button:SetAttribute("checkmouseovercast",false)
-        button:RegisterForClicks("AnyUp"); button:EnableMouse(true)
+        if not preview then
+            button:SetAttribute("useparent-unit",true); button:SetAttribute("unitsuffix","pet")
+            button:SetAttribute("type1","target"); button:SetAttribute("*type1","target")
+            button:SetAttribute("type2","togglemenu"); button:SetAttribute("*type2","togglemenu")
+            button:SetAttribute("useOnKeyDown",false)
+            button:SetAttribute("checkselfcast",false); button:SetAttribute("checkfocuscast",false)
+            button:SetAttribute("checkmouseovercast",false)
+            button:RegisterForClicks("AnyUp")
+        end
+        button:EnableMouse(true)
         state.portrait=button:CreateTexture(nil,"ARTWORK")
         state.portrait:SetPoint("TOPLEFT",0,0); state.portrait:SetSize(18,18)
         local mask=button:CreateMaskTexture()
@@ -154,6 +188,12 @@ function Pets:Create(card)
         state.text=health:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
         state.text:SetFont(FONT,8,"OUTLINE"); state.text:SetPoint("CENTER",health,"CENTER")
         local function refreshTooltip(self)
+            if preview then
+                local sample=card.previewPetData
+                GameTooltip:SetText(sample and sample.name or "Sample pet")
+                GameTooltip:AddLine("Sample data - targeting and pet actions are disabled.",1,.82,0,true)
+                GameTooltip:Show();return
+            end
             local unit=unitOf(card)
             if ownerOffline(card) then
                 GameTooltip:SetText("Owner offline")
@@ -180,11 +220,18 @@ function Pets:Create(card)
         end)
         button:SetScript("OnLeave",clearTooltip)
         button:SetScript("OnHide",clearTooltip)
-        createAuras(state)
+        if preview then
+            state.sampleAuras={}
+            for index=1,4 do
+                local aura=CreateFrame("Button",nil,button)
+                aura:SetPoint("TOPLEFT",button,"TOPLEFT",115+(index-1)*15,-2)
+                initializeAura(aura,true);aura:Hide();state.sampleAuras[index]=aura
+            end
+        else createAuras(state) end
     end)
     if not ok then
         release(state)
-        if state.button then pcall(UnregisterUnitWatch,state.button); state.button:Hide() end
+        if state.button then if not preview then pcall(UnregisterUnitWatch,state.button) end;state.button:Hide() end
         state.reason="Pet frame setup failed: "..tostring(reason)
         return false
     end
@@ -196,6 +243,7 @@ function Pets:Configure(card)
     local state=card.partyPet
     if not state then return self:Create(card) end
     if not state.supported then return false end
+    if card.previewIndex then return self:Preview(card,card.previewPetData) end
     state.requested=self:WantsSpace()
     state.ownerOffline=ownerOffline(card)
     local enabled=state.requested and not state.ownerOffline
@@ -213,6 +261,7 @@ function Pets:Configure(card)
     return true
 end
 function Pets:Update(card)
+    if card.previewIndex then return self:Preview(card,card.previewPetData) end
     local state=card.partyPet
     if not state or not state.supported then return false end
     -- Also revisit disabled rows, so reconnecting owners regain native pet
@@ -235,13 +284,7 @@ function Pets:Update(card)
         self:Clear(card); return false
     end
     local hp,maximum=call(UnitHealth,unit,false),call(UnitHealthMax,unit)
-    -- Native setters consume opaque numeric health values directly.
-    if type(hp)=="number" and type(maximum)=="number" then
-        state.health:SetMinMaxValues(0,maximum); state.health:SetValue(hp)
-        state.text:SetFormattedText("%d / %d",hp,maximum)
-    else
-        state.health:SetMinMaxValues(0,1); state.health:SetValue(0); state.text:SetText("")
-    end
+    paintHealth(state,hp,maximum)
     SetPortraitTexture(state.portrait,unit)
     local connected=call(UnitIsConnected,unit)
     state.portrait:SetDesaturated(public(connected,"boolean") and not connected or false)
@@ -262,9 +305,44 @@ function Pets:Update(card)
     end
     return true
 end
+-- Only public fixture data enters this adapter. It shares geometry and painters,
+-- but never registers a watcher, native aura container, or secure action.
+function Pets:Preview(card,data)
+    if not card.previewIndex or ns.InCombat() then return false end
+    card.previewPetData=data
+    if not card.partyPet and not self:Create(card) then return false end
+    local state=card.partyPet
+    if not state.supported then return false end
+    state.requested=self:WantsSpace()
+    state.enabled=state.requested and data~=nil
+    state.button:SetShown(state.enabled)
+    if not state.enabled then self:Clear(card);return true end
+    paintHealth(state,data.health,data.healthMax)
+    state.portrait:SetTexture(data.icon or "Interface\\Icons\\Ability_Hunter_Pet_Bear")
+    state.portrait:SetDesaturated(false)
+    state.threat:SetAlpha(0)
+    if data.threat and data.threat>0 then paintThreat(state,data.threat) end
+    for index,button in ipairs(state.sampleAuras) do
+        local aura=data.debuffs and data.debuffs[index]
+        button.sampleAura=aura;button:SetShown(aura~=nil)
+        if aura then
+            button.sampleIcon:SetTexture(aura.icon or "Interface\\Icons\\INV_Misc_QuestionMark")
+            button.sampleTimer:SetText(aura.durationText or "")
+            button.sampleCount:SetText(aura.stacks and aura.stacks>1 and tostring(aura.stacks) or "")
+            local colors=DebuffTypeColor or {Magic={r=.2,g=.6,b=1},Curse={r=.6,g=0,b=1},Disease={r=.6,g=.4,b=0},Poison={r=0,g=.6,b=0},none={r=.8,g=0,b=0}}
+            local c=colors[aura.dispelType or "none"] or colors.none or {r=.8,g=0,b=0}
+            button.sampleBorder:SetVertexColor(c.r,c.g,c.b)
+        end
+    end
+    return true
+end
 function Pets:Clear(card)
     local state=card and card.partyPet
     release(state)
+    if state and state.preview then
+        state.button:Hide()
+        for _,button in ipairs(state.sampleAuras or {}) do button:Hide() end
+    end
     if state and state.threat then state.threat:SetAlpha(0) end
     if state and state.health then
         state.health:SetMinMaxValues(0,1); state.health:SetValue(0); state.text:SetText("")

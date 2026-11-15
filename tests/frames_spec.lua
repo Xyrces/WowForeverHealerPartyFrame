@@ -38,7 +38,7 @@ load("CleanseGeometry")
 local bindingCalls=0
 local function globalBinding() bindingCalls=bindingCalls+1;error("party controls must not set global bindings") end
 SetBinding, SetBindingClick, SetOverrideBindingClick, SetOverrideBinding = globalBinding, globalBinding, globalBinding, globalBinding
-load("Frames")
+load("PreviewData"); load("Frames")
 state.units.party1 = { name = "Tank", class = "WARRIOR", guid = "tank", health = 500, maxHealth = 1000, power = 0, maxPower = 0 }
 state.units.party2 = { name = "Mage", class = "MAGE", guid = "mage", health = 250, maxHealth = 500, power = 100, maxPower = 200 }
 state.units.party1.level,state.units.party1.role,state.units.party1.map=24,"TANK",2
